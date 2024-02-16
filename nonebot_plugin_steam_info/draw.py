@@ -368,6 +368,8 @@ def draw_friends_status(
         or (d["personastate"] == 4 and d["status"] == "在线")
         or (d["personastate"] in [2, 5, 6])
     ]
+    # 按 1, 2, 4, 5, 6, 3 的顺序排序
+    online_data.sort(key=lambda x: (7 if x["personastate"] == 3 else x["personastate"]))
 
     if online_data:
         status_images.append(draw_online_friends_status(online_data))

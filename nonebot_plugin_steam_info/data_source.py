@@ -83,29 +83,31 @@ class SteamInfoData:
             for old_player in old_content["players"]:
                 if player["steamid"] == old_player["steamid"]:
                     if player["personastate"] != old_player["personastate"]:
-                        match player["personastate"]:
-                            case 0:
-                                result.append(f"{player['personaname']} 离线了")
-                            case 1:
-                                result.append(f"{player['personaname']} 上线了")
-                            case 2:
-                                result.append(f"{player['personaname']} 开始忙碌")
-                            case 3:
-                                result.append(f"{player['personaname']} 离开了")
-                            case 4:
-                                result.append(f"{player['personaname']} 睡着了")
-                            case 5:
-                                result.append(
-                                    f"{player['personaname']} is looking to trade"
-                                )
-                            case 6:
-                                result.append(
-                                    f"{player['personaname']} is looking to play"
-                                )
-                            case _:
-                                result.append(
-                                    f"{player['personaname']} 状态未知！Personastate: {player['personastate']}"
-                                )
+                        pass
+                        # TODO: 加上开关
+                        # match player["personastate"]:
+                        #     case 0:
+                        #         result.append(f"{player['personaname']} 离线了")
+                        #     case 1:
+                        #         result.append(f"{player['personaname']} 上线了")
+                        #     case 2:
+                        #         result.append(f"{player['personaname']} 开始忙碌")
+                        #     case 3:
+                        #         result.append(f"{player['personaname']} 离开了")
+                        #     case 4:
+                        #         result.append(f"{player['personaname']} 睡着了")
+                        #     case 5:
+                        #         result.append(
+                        #             f"{player['personaname']} is looking to trade"
+                        #         )
+                        #     case 6:
+                        #         result.append(
+                        #             f"{player['personaname']} is looking to play"
+                        #         )
+                        #     case _:
+                        #         result.append(
+                        #             f"{player['personaname']} 状态未知！Personastate: {player['personastate']}"
+                        #         )
 
                     if player.get("gameextrainfo") != old_player.get("gameextrainfo"):
                         if player.get("gameextrainfo") is not None:
