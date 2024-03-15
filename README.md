@@ -10,7 +10,9 @@
 steambind [Steam ID 或 Steam好友代码] -绑定 Steam   
 steaminfo -查看绑定信息   
 steamcheck -查询群友 Steam 状态   
-steamupdate [名称] [图片] -更新群聊头像和名称   
+steamupdate [名称] [图片] -更新群聊头像和名称
+
+> 记得加上你配置的命令头哦
 
 ## 配置
 在 .env 文件中配置以下内容
@@ -21,4 +23,8 @@ steamupdate [名称] [图片] -更新群聊头像和名称
 | PROXY | 无 | 代理地址 |
 | STEAM_REQUEST_INTERVAL | 300 | Steam 请求间隔 & 播报间隔。单位为秒 |
 
-将仓库克隆到本地，把仓库中的 `nonebot_plugin_steam_info` 文件夹放到你的 NoneBot **插件**目录下，再将仓库中的 `res` 和 `fonts` 文件夹放到你的 NoneBot **启动**目录下。这时再运行你的 NoneBot，插件就会被加载了。
+最后再把仓库中 `fonts` 文件夹下的字体文件放到 Bot 的 **运行目录** 下，配置就完毕啦
+
+> 这里使用了 MiSans 字体，感谢 [MiSans](https://hyperos.mi.com/font/zh/)
+
+>如果你希望使用其他字体，请在 `draw.py` 中，将 `font_regular_path`, `font_light_path` 和 `font_bold_path` 修改为你的字体文件路径

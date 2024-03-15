@@ -7,15 +7,13 @@ from .models import PlayerSummariesResponse
 
 
 class BindData:
-    def __init__(self, save_path: str) -> None:
+    def __init__(self, save_path: Path) -> None:
         self.content: Dict[str, List[Dict[str, str]]] = {}
         self._save_path = save_path
 
-        if Path(save_path).exists():
+        if save_path.exists():
             self.content = json.loads(Path(save_path).read_text("utf-8"))
         else:
-            # 新建文件夹
-            Path(save_path).parent.mkdir(parents=True, exist_ok=True)
             self.save()
 
     def save(self) -> None:
@@ -46,15 +44,13 @@ class BindData:
 
 
 class SteamInfoData:
-    def __init__(self, save_path: str) -> None:
+    def __init__(self, save_path: Path) -> None:
         self.content: Dict[str, PlayerSummariesResponse] = {}
         self._save_path = save_path
 
-        if Path(save_path).exists():
-            self.content = json.loads(Path(save_path).read_text("utf-8"))
+        if save_path.exists():
+            self.content = json.loads(save_path.read_text("utf-8"))
         else:
-            # 新建文件夹
-            Path(save_path).parent.mkdir(parents=True, exist_ok=True)
             self.save()
 
     def save(self) -> None:
@@ -82,33 +78,6 @@ class SteamInfoData:
         for player in new_content["players"]:
             for old_player in old_content["players"]:
                 if player["steamid"] == old_player["steamid"]:
-                    if player["personastate"] != old_player["personastate"]:
-                        pass
-                        # TODO: 加上开关
-                        # match player["personastate"]:
-                        #     case 0:
-                        #         result.append(f"{player['personaname']} 离线了")
-                        #     case 1:
-                        #         result.append(f"{player['personaname']} 上线了")
-                        #     case 2:
-                        #         result.append(f"{player['personaname']} 开始忙碌")
-                        #     case 3:
-                        #         result.append(f"{player['personaname']} 离开了")
-                        #     case 4:
-                        #         result.append(f"{player['personaname']} 睡着了")
-                        #     case 5:
-                        #         result.append(
-                        #             f"{player['personaname']} is looking to trade"
-                        #         )
-                        #     case 6:
-                        #         result.append(
-                        #             f"{player['personaname']} is looking to play"
-                        #         )
-                        #     case _:
-                        #         result.append(
-                        #             f"{player['personaname']} 状态未知！Personastate: {player['personastate']}"
-                        #         )
-
                     if player.get("gameextrainfo") != old_player.get("gameextrainfo"):
                         if player.get("gameextrainfo") is not None:
                             result.append(
@@ -133,31 +102,31 @@ class SteamInfoData:
 
 
 class ParentData:
-    def __init__(self, save_path: str) -> None:
+    def __init__(self, save_path: Path) -> None:
         self.content: Dict[str, str] = {}  # parent_id: name
-        self._save_path = Path(save_path)
+        self._save_path = save_path
 
-        if not (Path(save_path) / "parent_data.json").exists():
-            Path(save_path).parent.mkdir(parents=True, exist_ok=True)
+        if not save_path.exists():
+            save_path.parent.mkdir(parents=True, exist_ok=True)
             self.save()
         else:
             self.content = json.loads(
-                (Path(save_path) / "parent_data.json").read_text("utf-8")
+                save_path.read_text("utf-8")
             )
 
     def save(self) -> None:
-        with open(self._save_path / "parent_data.json", "w", encoding="utf-8") as f:
+        with open(self._save_path, "w", encoding="utf-8") as f:
             json.dump(self.content, f, indent=4)
 
     def update(self, parent_id: str, avatar: Image.Image, name: str) -> None:
         self.content[parent_id] = name
         self.save()
         # 保存图片
-        avatar_path = self._save_path / f"{parent_id}.png"
+        avatar_path = self._save_path.parent / f"{parent_id}.png"
         avatar.save(avatar_path)
 
     def get(self, parent_id: str) -> Tuple[Image.Image, str]:
         if parent_id not in self.content:
             return Image.open("res/unknown_avatar.jpg"), parent_id
-        avatar_path = self._save_path / f"{parent_id}.png"
+        avatar_path = self._save_path.parent / f"{parent_id}.png"
         return Image.open(avatar_path), self.content[parent_id]

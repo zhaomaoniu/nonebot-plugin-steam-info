@@ -2,6 +2,7 @@ import time
 import aiohttp
 import calendar
 from io import BytesIO
+from pathlib import Path
 from typing import List, Dict
 from PIL import Image, ImageDraw, ImageFont
 
@@ -12,16 +13,49 @@ WIDTH = 400
 PARENT_AVATAR_SIZE = 72
 MEMBER_AVATAR_SIZE = 50
 
+unknown_avatar_path = Path(__file__).parent / "res/unknown_avatar.jpg"
+parent_status_path = Path(__file__).parent / "res/parent_status.png"
+friends_search_path = Path(__file__).parent / "res/friends_search.png"
+busy_path = Path(__file__).parent / "res/busy.png"
+zzz_online_path = Path(__file__).parent / "res/zzz_online.png"
+zzz_gaming_path = Path(__file__).parent / "res/zzz_gaming.png"
+
+font_regular_path = Path().cwd() / "fonts/MiSans-Regular.ttf"
+font_light_path = Path().cwd() / "fonts/MiSans-Light.ttf"
+font_bold_path = Path().cwd() / "fonts/MiSans-Bold.ttf"
+
+
+def check_font():
+    if not font_regular_path.exists():
+        raise FileNotFoundError(f"Font file {font_regular_path} not found.")
+    if not font_light_path.exists():
+        raise FileNotFoundError(f"Font file {font_light_path} not found.")
+    if not font_bold_path.exists():
+        raise FileNotFoundError(f"Font file {font_bold_path} not found.")
+
+
+async def fetch_avatar(avatar_url: str, proxy: str = None) -> Image.Image:
+    async with aiohttp.ClientSession() as session:
+        async with session.get(avatar_url, proxy=proxy) as resp:
+            if resp.status != 200:
+                return Image.open("res/unknown_avatar.jpg")
+            return Image.open(BytesIO(await resp.read()))
+
 
 async def simplize_steam_player_data(
-    player: Player, proxy: str = None
+    player: Player, proxy: str = None, avatar_dir: Path = None
 ) -> Dict[str, str]:
-    async with aiohttp.ClientSession() as session:
-        async with session.get(player["avatarfull"], proxy=proxy) as resp:
-            if resp.status != 200:
-                avatar = Image.open("res/unknown_avatar.jpg")
-            else:
-                avatar = Image.open(BytesIO(await resp.read()))
+    if avatar_dir is not None:
+        avatar_path = avatar_dir / f"avatar_{player['steamid']}.png"
+
+        if avatar_path.exists():
+            avatar = Image.open(avatar_path)
+        else:
+            avatar = await fetch_avatar(player["avatarfull"], proxy)
+
+            avatar.save(avatar_path)
+    else:
+        avatar = await fetch_avatar(player["avatarfull"], proxy)
 
     match player["personastate"]:
         case 0:

@@ -2,17 +2,20 @@ import aiohttp
 import nonebot
 from io import BytesIO
 from pathlib import Path
-from typing import Union
 from nonebot.log import logger
 from PIL import Image as PILImage
+from typing import Union, Optional
+from nonebot.params import Depends
 from nonebot.params import CommandArg
 from nonebot import on_command, require
 from nonebot.adapters import Message, Event, Bot
 from nonebot.plugin import PluginMetadata, inherit_supported_adapters
 
 require("nonebot_plugin_alconna")
+require("nonebot_plugin_localstore")
 require("nonebot_plugin_apscheduler")
 
+import nonebot_plugin_localstore as store
 from nonebot_plugin_apscheduler import scheduler
 from nonebot_plugin_alconna import Text, Image, UniMessage, Target
 
@@ -20,7 +23,12 @@ from .config import Config
 from .models import PlayerSummaries
 from .data_source import BindData, SteamInfoData, ParentData
 from .steam import get_steam_id, get_steam_users_info, STEAM_ID_OFFSET
-from .draw import draw_friends_status, simplize_steam_player_data, image_to_bytes
+from .draw import (
+    draw_friends_status,
+    simplize_steam_player_data,
+    image_to_bytes,
+    check_font,
+)
 
 
 __plugin_meta__ = PluginMetadata(
@@ -48,9 +56,33 @@ else:
     config = Config.parse_obj(get_driver().config)
 
 
-bind_data = BindData("data/steam_info/data.json")
-steam_info_data = SteamInfoData("data/steam_info/steam_info.json")
-parent_data = ParentData("data/steam_info")
+bind_data_path = store.get_data_file("nonebot_plugin_steam_info", "bind_data.json")
+steam_info_data_path = store.get_data_file(
+    "nonebot_plugin_steam_info", "steam_info.json"
+)
+parent_data_path = store.get_data_file("nonebot_plugin_steam_info", "parent_data.json")
+avatar_path = store.get_cache_dir("nonebot_plugin_steam_info")
+
+bind_data = BindData(bind_data_path)
+steam_info_data = SteamInfoData(steam_info_data_path)
+parent_data = ParentData(parent_data_path)
+
+try:
+    check_font()
+except FileNotFoundError as e:
+    logger.error(
+        f"{e}, nonebot_plugin_steam_info 无法使用，请参照 `https://github.com/zhaomaoniu/nonebot-plugin-steam-info` 配置字体文件"
+    )
+
+
+async def get_target(event: Event, bot: Bot) -> Optional[Target]:
+    target = UniMessage.get_target(event, bot, bot.adapter.get_name())
+
+    if target.private:
+        # 不支持私聊消息
+        return None
+
+    return target
 
 
 async def to_image_data(image: Image) -> Union[BytesIO, bytes]:
@@ -79,7 +111,7 @@ async def broadcast_steam_info(parent_id: str, steam_info: PlayerSummaries):
         return None
 
     steam_status_data = [
-        await simplize_steam_player_data(player, config.proxy)
+        await simplize_steam_player_data(player, config.proxy, avatar_path)
         for player in steam_info["response"]["players"]
     ]
 
@@ -123,12 +155,9 @@ async def update_steam_info():
 
 
 @bind.handle()
-async def bind_handle(event: Event, bot: Bot, cmd_arg: Message = CommandArg()):
-    target = UniMessage.get_target(event, bot, bot.adapter.get_name())
-
-    if target.parent_id == "":
-        await bind.finish("此功能仅在群聊/频道可用")
-
+async def bind_handle(
+    event: Event, target: Target = Depends(get_target), cmd_arg: Message = CommandArg()
+):
     parent_id = target.parent_id
 
     arg = cmd_arg.extract_plain_text()
@@ -153,12 +182,7 @@ async def bind_handle(event: Event, bot: Bot, cmd_arg: Message = CommandArg()):
 
 
 @info.handle()
-async def info_handle(event: Event, bot: Bot):
-    target = UniMessage.get_target(event, bot, bot.adapter.get_name())
-
-    if target.parent_id == "":
-        await info.finish("此功能仅在群聊/频道可用")
-
+async def info_handle(event: Event, target: Target = Depends(get_target)):
     parent_id = target.parent_id
 
     if user_data := bind_data.get(parent_id, event.get_user_id()):
@@ -175,14 +199,11 @@ async def info_handle(event: Event, bot: Bot):
 
 
 @check.handle()
-async def check_handle(bot: Bot, event: Event, arg: Message = CommandArg()):
+async def check_handle(
+    target: Target = Depends(get_target), arg: Message = CommandArg()
+):
     if arg.extract_plain_text().strip() != "":
         return None
-
-    target = UniMessage.get_target(event, bot, bot.adapter.get_name())
-
-    if target.parent_id == "":
-        await check.finish("此功能仅在群聊/频道可用")
 
     parent_id = target.parent_id
 
@@ -197,24 +218,22 @@ async def check_handle(bot: Bot, event: Event, arg: Message = CommandArg()):
     parent_avatar, parent_name = parent_data.get(parent_id)
 
     steam_status_data = [
-        await simplize_steam_player_data(player, config.proxy)
+        await simplize_steam_player_data(player, config.proxy, avatar_path)
         for player in steam_info["response"]["players"]
     ]
 
     image = draw_friends_status(parent_avatar, parent_name, steam_status_data)
 
-    await check.finish(await UniMessage(Image(raw=image_to_bytes(image))).export(bot))
+    await target.send(UniMessage(Image(raw=image_to_bytes(image))))
 
 
 @update_parent_info.handle()
 async def update_parent_info_handle(
-    event: Event, bot: Bot, arg: Message = CommandArg()
+    bot: Bot,
+    event: Event,
+    target: Target = Depends(get_target),
+    arg: Message = CommandArg(),
 ):
-    target = UniMessage.get_target(event, bot, bot.adapter.get_name())
-
-    if target.parent_id == "":
-        await update_parent_info.finish("此功能仅在群聊/频道可用")
-
     msg = await UniMessage.generate(message=arg, event=event, bot=bot)
     info = {}
     for seg in msg:

@@ -5,7 +5,7 @@
 groups = ["default"]
 strategy = ["cross_platform", "inherit_metadata"]
 lock_version = "4.4.1"
-content_hash = "sha256:0098b413051eb6ffd900e585951bf4999cd9a905d3fc327b41e43192d779711b"
+content_hash = "sha256:f4043bb04b4fe7c93cf47bce4c3bb87bd49b8bb8ab7029844881d633292df04e"
 
 [[package]]
 name = "aiohttp"
@@ -470,6 +470,22 @@ dependencies = [
 files = [
     {file = "nonebot_plugin_apscheduler-0.4.0-py3-none-any.whl", hash = "sha256:f01bb418a5ecf9f04dcadbbc2ff5ba565a48177eb0a758c8c46b13048ac5680c"},
     {file = "nonebot_plugin_apscheduler-0.4.0.tar.gz", hash = "sha256:ba91e68809a38e6dbe28906366d47f37f754ded360944b938cd5ac62029a0eb6"},
+]
+
+[[package]]
+name = "nonebot-plugin-localstore"
+version = "0.6.0"
+requires_python = ">=3.8,<4.0"
+summary = "Local Storage Support for NoneBot2"
+groups = ["default"]
+dependencies = [
+    "nonebot2<3.0.0,>=2.2.0",
+    "pydantic!=2.5.0,!=2.5.1,<3.0.0,>=1.10.0",
+    "typing-extensions>=4.0.0",
+]
+files = [
+    {file = "nonebot_plugin_localstore-0.6.0-py3-none-any.whl", hash = "sha256:59f0126d85680601166a9a62cca886a33e1b0a8fef7cd67fff52747bd47f42d3"},
+    {file = "nonebot_plugin_localstore-0.6.0.tar.gz", hash = "sha256:7eb4039cb2e76c54b860b2b98f2b90cd25284919603e81dedec367f215662fcd"},
 ]
 
 [[package]]
