@@ -6,6 +6,11 @@
 - [x] 群友状态变更播报
 - [x] 主动查询群友状态
 
+## 预览
+仿照了 Steam 好友列表的样式
+
+![image](./preview.png)
+
 ## 使用
 steambind [Steam ID 或 Steam好友代码] -绑定 Steam   
 steaminfo -查看绑定信息   
