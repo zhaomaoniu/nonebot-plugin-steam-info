@@ -40,7 +40,14 @@ class BindData:
     def get_all(self, parent_id: str) -> List[str]:
         if parent_id not in self.content:
             return []
-        return [data["steam_id"] for data in self.content[parent_id]]
+
+        result = []
+
+        for data in self.content[parent_id]:
+            if not data["steam_id"] in result:
+                result.append(data["steam_id"])
+
+        return result
 
 
 class SteamInfoData:
@@ -110,9 +117,7 @@ class ParentData:
             save_path.parent.mkdir(parents=True, exist_ok=True)
             self.save()
         else:
-            self.content = json.loads(
-                save_path.read_text("utf-8")
-            )
+            self.content = json.loads(save_path.read_text("utf-8"))
 
     def save(self) -> None:
         with open(self._save_path, "w", encoding="utf-8") as f:
@@ -127,6 +132,9 @@ class ParentData:
 
     def get(self, parent_id: str) -> Tuple[Image.Image, str]:
         if parent_id not in self.content:
-            return Image.open(Path(__file__).parent / "res/unknown_avatar.jpg"), parent_id
+            return (
+                Image.open(Path(__file__).parent / "res/unknown_avatar.jpg"),
+                parent_id,
+            )
         avatar_path = self._save_path.parent / f"{parent_id}.png"
         return Image.open(avatar_path), self.content[parent_id]
