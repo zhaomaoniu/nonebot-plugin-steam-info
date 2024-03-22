@@ -127,6 +127,6 @@ class ParentData:
 
     def get(self, parent_id: str) -> Tuple[Image.Image, str]:
         if parent_id not in self.content:
-            return Image.open("res/unknown_avatar.jpg"), parent_id
+            return Image.open(Path(__file__).parent / "res/unknown_avatar.jpg"), parent_id
         avatar_path = self._save_path.parent / f"{parent_id}.png"
         return Image.open(avatar_path), self.content[parent_id]
