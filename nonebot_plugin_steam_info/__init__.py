@@ -158,7 +158,7 @@ async def update_steam_info():
 async def bind_handle(
     event: Event, target: Target = Depends(get_target), cmd_arg: Message = CommandArg()
 ):
-    parent_id = target.parent_id
+    parent_id = target.parent_id or target.id
 
     arg = cmd_arg.extract_plain_text()
 
@@ -183,7 +183,7 @@ async def bind_handle(
 
 @info.handle()
 async def info_handle(event: Event, target: Target = Depends(get_target)):
-    parent_id = target.parent_id
+    parent_id = target.parent_id or target.id
 
     if user_data := bind_data.get(parent_id, event.get_user_id()):
         steam_id = user_data["steam_id"]
@@ -205,7 +205,7 @@ async def check_handle(
     if arg.extract_plain_text().strip() != "":
         return None
 
-    parent_id = target.parent_id
+    parent_id = target.parent_id or target.id
 
     steam_ids = bind_data.get_all(parent_id)
 
@@ -245,5 +245,5 @@ async def update_parent_info_handle(
     if "avatar" not in info or "name" not in info:
         await update_parent_info.finish("文本中应包含图片和文字")
 
-    parent_data.update(target.parent_id, info["avatar"], info["name"])
+    parent_data.update(target.parent_id or target.id, info["avatar"], info["name"])
     await update_parent_info.finish("更新成功")
