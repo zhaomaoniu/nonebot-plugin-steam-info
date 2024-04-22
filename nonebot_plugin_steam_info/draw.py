@@ -57,57 +57,42 @@ async def simplize_steam_player_data(
     else:
         avatar = await fetch_avatar(player["avatarfull"], proxy)
 
-    match player["personastate"]:
-        case 0:
-            if not player.get("lastlogoff"):
-                status = "离线"
-            else:
-                time_logged_off = player["lastlogoff"]  # Unix timestamp
-                time_to_now = calendar.timegm(time.gmtime()) - time_logged_off
+    if player["personastate"] == 0:
+        if not player.get("lastlogoff"):
+            status = "离线"
+        else:
+            time_logged_off = player["lastlogoff"]  # Unix timestamp
+            time_to_now = calendar.timegm(time.gmtime()) - time_logged_off
 
-                # 将时间转换为自然语言
-                if time_to_now < 60:
-                    status = "上次在线 刚刚"
-                elif time_to_now < 3600:
-                    status = f"上次在线 {time_to_now // 60} 分钟前"
-                elif time_to_now < 86400:
-                    status = f"上次在线 {time_to_now // 3600} 小时前"
-                elif time_to_now < 2592000:
-                    status = f"上次在线 {time_to_now // 86400} 天前"
-                elif time_to_now < 31536000:
-                    status = f"上次在线 {time_to_now // 2592000} 个月前"
-                else:
-                    status = f"上次在线 {time_to_now // 31536000} 年前"
-        case 1:
-            status = (
-                "在线"
-                if player.get("gameextrainfo") is None
-                else player["gameextrainfo"]
-            )
-        case 2:
-            status = (
-                "在线"
-                if player.get("gameextrainfo") is None
-                else player["gameextrainfo"]
-            )
-        case 3:
-            status = (
-                "离开"
-                if player.get("gameextrainfo") is None
-                else player["gameextrainfo"]
-            )
-        case 4:
-            status = (
-                "在线"
-                if player.get("gameextrainfo") is None
-                else player["gameextrainfo"]
-            )
-        case 5:
-            status = "在线"
-        case 6:
-            status = "在线"
-        case _:
-            status = "未知"
+            # 将时间转换为自然语言
+            if time_to_now < 60:
+                status = "上次在线 刚刚"
+            elif time_to_now < 3600:
+                status = f"上次在线 {time_to_now // 60} 分钟前"
+            elif time_to_now < 86400:
+                status = f"上次在线 {time_to_now // 3600} 小时前"
+            elif time_to_now < 2592000:
+                status = f"上次在线 {time_to_now // 86400} 天前"
+            elif time_to_now < 31536000:
+                status = f"上次在线 {time_to_now // 2592000} 个月前"
+            else:
+                status = f"上次在线 {time_to_now // 31536000} 年前"
+    elif player["personastate"] in [1, 2, 4]:
+        status = (
+            "在线"
+            if player.get("gameextrainfo") is None
+            else player["gameextrainfo"]
+        )
+    elif player["personastate"] == 3:
+        status = (
+            "离开"
+            if player.get("gameextrainfo") is None
+            else player["gameextrainfo"]
+        )
+    elif player["personastate"] in [5, 6]:
+        status = "在线"
+    else:
+        status = "未知"
 
     return {
         "avatar": avatar,
