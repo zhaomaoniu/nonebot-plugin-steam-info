@@ -12,10 +12,15 @@
 ![image](./preview.png)
 
 ## 使用
-steambind [Steam ID 或 Steam好友代码] -绑定 Steam   
-steaminfo -查看绑定信息   
-steamcheck -查询群友 Steam 状态   
-steamupdate [名称] [图片] -更新群聊头像和名称
+| 命令 | 别名 |  说明 |
+| --- | --- | --- |
+| steambind [Steam ID 或 Steam好友代码] | 绑定steam | 绑定 Steam |
+| steamunbind | 解绑steam | 解绑 Steam |
+| steaminfo | steam信息 | 查看绑定信息 |
+| steamcheck | 查看steam, 查steam | 查询群友 Steam 状态 |
+| steamupdate [名称] [图片] | 更新群信息 | 更新群聊头像和名称 |
+| steamenable | 启用steam | 启用群友状态播报 |
+| steamdisable | 禁用steam | 禁用群友状态播报 |
 
 > 记得加上你配置的命令头哦
 

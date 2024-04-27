@@ -25,6 +25,14 @@ class BindData:
             self.content[parent_id] = [content]
         else:
             self.content[parent_id].append(content)
+    
+    def remove(self, parent_id: str, user_id: str) -> None:
+        if parent_id not in self.content:
+            return
+        for data in self.content[parent_id]:
+            if data["user_id"] == user_id:
+                self.content[parent_id].remove(data)
+                break
 
     def update(self, parent_id: str, content: Dict[str, str]) -> None:
         self.content[parent_id] = content
@@ -138,3 +146,33 @@ class ParentData:
             )
         avatar_path = self._save_path.parent / f"{parent_id}.png"
         return Image.open(avatar_path), self.content[parent_id]
+
+
+class DisableParentData:
+    """储存禁用 Steam 通知的 parent"""
+
+    def __init__(self, save_path: Path) -> None:
+        self.content: List[str] = []
+        self._save_path = save_path
+
+        if save_path.exists():
+            self.content = json.loads(save_path.read_text("utf-8"))
+        else:
+            self.save()
+
+    def save(self) -> None:
+        with open(self._save_path, "w", encoding="utf-8") as f:
+            json.dump(self.content, f, indent=4)
+
+    def add(self, parent_id: str) -> None:
+        if parent_id not in self.content:
+            self.content.append(parent_id)
+            self.save()
+
+    def remove(self, parent_id: str) -> None:
+        if parent_id in self.content:
+            self.content.remove(parent_id)
+            self.save()
+
+    def is_disabled(self, parent_id: str) -> bool:
+        return parent_id in self.content

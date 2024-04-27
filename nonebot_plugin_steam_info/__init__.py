@@ -21,20 +21,20 @@ from nonebot_plugin_alconna import Text, Image, UniMessage, Target
 
 from .config import Config
 from .models import PlayerSummaries
-from .data_source import BindData, SteamInfoData, ParentData
 from .steam import get_steam_id, get_steam_users_info, STEAM_ID_OFFSET
+from .data_source import BindData, SteamInfoData, ParentData, DisableParentData
 from .draw import (
+    check_font,
+    image_to_bytes,
     draw_friends_status,
     simplize_steam_player_data,
-    image_to_bytes,
-    check_font,
 )
 
 
 __plugin_meta__ = PluginMetadata(
     name="Steam Info",
     description="播报绑定的 Steam 好友状态",
-    usage="steambind [Steam ID 或 Steam好友代码] -绑定 Steam\nsteaminfo -查看绑定信息\nsteamcheck -查询群友 Steam 状态\nsteamupdate [名称] [图片] -更新群聊头像和名称",
+    usage="绑定 Steam ID: steambind [Steam ID 或 Steam好友代码]\n解绑 Steam ID: steamunbind\n查看 Steam ID: steaminfo\n查看 Steam 好友状态: steamcheck\n启用 Steam 播报: steamenable\n禁用 Steam 播报: steamdisable\n更新群信息: steamupdate",
     type="application",
     homepage="https://github.com/zhaomaoniu/nonebot-plugin-steam-info",
     config=Config,
@@ -43,9 +43,12 @@ __plugin_meta__ = PluginMetadata(
 
 
 bind = on_command("steambind", aliases={"绑定steam"}, priority=10)
+unbind = on_command("steamunbind", aliases={"解绑steam"}, priority=10)
 info = on_command("steaminfo", aliases={"steam信息"}, priority=10)
 check = on_command("steamcheck", aliases={"查看steam", "查steam"}, priority=10)
-update_parent_info = on_command("steamupdate", priority=10)
+enable = on_command("steamenable", aliases={"启用steam"}, priority=10)
+disable = on_command("steamdisable", aliases={"禁用steam"}, priority=10)
+update_parent_info = on_command("steamupdate", aliases={"更新群信息"}, priority=10)
 
 
 if hasattr(nonebot, "get_plugin_config"):
@@ -61,11 +64,15 @@ steam_info_data_path = store.get_data_file(
     "nonebot_plugin_steam_info", "steam_info.json"
 )
 parent_data_path = store.get_data_file("nonebot_plugin_steam_info", "parent_data.json")
+disable_parent_data_path = store.get_data_file(
+    "nonebot_plugin_steam_info", "disable_parent_data.json"
+)
 avatar_path = store.get_cache_dir("nonebot_plugin_steam_info")
 
 bind_data = BindData(bind_data_path)
 steam_info_data = SteamInfoData(steam_info_data_path)
 parent_data = ParentData(parent_data_path)
+disable_parent_data = DisableParentData(disable_parent_data_path)
 
 try:
     check_font()
@@ -103,6 +110,9 @@ async def to_image_data(image: Image) -> Union[BytesIO, bytes]:
 
 
 async def broadcast_steam_info(parent_id: str, steam_info: PlayerSummaries):
+    if disable_parent_data.is_disabled(parent_id):
+        return None
+
     bot = nonebot.get_bot()
 
     msg = steam_info_data.compare(parent_id, steam_info["response"])
@@ -181,6 +191,20 @@ async def bind_handle(
         await bind.finish(f"已绑定你的 Steam ID 为 {steam_id}")
 
 
+@unbind.handle()
+async def unbind_handle(event: Event, target: Target = Depends(get_target)):
+    parent_id = target.parent_id or target.id
+    user_id = event.get_user_id()
+
+    if bind_data.get(parent_id, user_id) is not None:
+        bind_data.remove(parent_id, user_id)
+        bind_data.save()
+
+        await unbind.finish("已解绑 Steam ID")
+    else:
+        await unbind.finish("未绑定 Steam ID")
+
+
 @info.handle()
 async def info_handle(event: Event, target: Target = Depends(get_target)):
     parent_id = target.parent_id or target.id
@@ -247,3 +271,23 @@ async def update_parent_info_handle(
 
     parent_data.update(target.parent_id or target.id, info["avatar"], info["name"])
     await update_parent_info.finish("更新成功")
+
+
+@enable.handle()
+async def enable_handle(target: Target = Depends(get_target)):
+    parent_id = target.parent_id or target.id
+
+    disable_parent_data.remove(parent_id)
+    disable_parent_data.save()
+
+    await enable.finish("已启用 Steam 播报")
+
+
+@disable.handle()
+async def disable_handle(target: Target = Depends(get_target)):
+    parent_id = target.parent_id or target.id
+
+    disable_parent_data.add(parent_id)
+    disable_parent_data.save()
+
+    await disable.finish("已禁用 Steam 播报")
