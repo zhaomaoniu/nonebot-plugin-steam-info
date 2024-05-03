@@ -19,6 +19,7 @@ friends_search_path = Path(__file__).parent / "res/friends_search.png"
 busy_path = Path(__file__).parent / "res/busy.png"
 zzz_online_path = Path(__file__).parent / "res/zzz_online.png"
 zzz_gaming_path = Path(__file__).parent / "res/zzz_gaming.png"
+gaming_path = Path(__file__).parent / "res/gaming.png"
 
 font_regular_path = (Path().cwd() / "fonts/MiSans-Regular.ttf").resolve().__str__()
 font_light_path = (Path().cwd() / "fonts/MiSans-Light.ttf").resolve().__str__()
@@ -34,7 +35,7 @@ def check_font():
         raise FileNotFoundError(f"Font file {font_bold_path} not found.")
 
 
-async def fetch_avatar(avatar_url: str, proxy: str = None) -> Image.Image:
+async def _fetch_avatar(avatar_url: str, proxy: str = None) -> Image.Image:
     async with aiohttp.ClientSession() as session:
         async with session.get(avatar_url, proxy=proxy) as resp:
             if resp.status != 200:
@@ -42,20 +43,26 @@ async def fetch_avatar(avatar_url: str, proxy: str = None) -> Image.Image:
             return Image.open(BytesIO(await resp.read()))
 
 
-async def simplize_steam_player_data(
-    player: Player, proxy: str = None, avatar_dir: Path = None
-) -> Dict[str, str]:
+async def fetch_avatar(player: Player, avatar_dir: Path, proxy: str = None) -> Image.Image:
     if avatar_dir is not None:
         avatar_path = avatar_dir / f"avatar_{player['steamid']}.png"
 
         if avatar_path.exists():
             avatar = Image.open(avatar_path)
         else:
-            avatar = await fetch_avatar(player["avatarfull"], proxy)
+            avatar = await _fetch_avatar(player["avatarfull"], proxy)
 
             avatar.save(avatar_path)
     else:
-        avatar = await fetch_avatar(player["avatarfull"], proxy)
+        avatar = await _fetch_avatar(player["avatarfull"], proxy)
+    
+    return avatar
+
+
+async def simplize_steam_player_data(
+    player: Player, proxy: str = None, avatar_dir: Path = None
+) -> Dict[str, str]:
+    avatar = await fetch_avatar(player, avatar_dir, proxy)
 
     if player["personastate"] == 0:
         if not player.get("lastlogoff"):
@@ -79,15 +86,11 @@ async def simplize_steam_player_data(
                 status = f"上次在线 {time_to_now // 31536000} 年前"
     elif player["personastate"] in [1, 2, 4]:
         status = (
-            "在线"
-            if player.get("gameextrainfo") is None
-            else player["gameextrainfo"]
+            "在线" if player.get("gameextrainfo") is None else player["gameextrainfo"]
         )
     elif player["personastate"] == 3:
         status = (
-            "离开"
-            if player.get("gameextrainfo") is None
-            else player["gameextrainfo"]
+            "离开" if player.get("gameextrainfo") is None else player["gameextrainfo"]
         )
     elif player["personastate"] in [5, 6]:
         status = "在线"
@@ -121,6 +124,38 @@ personastate_colors = {
     5: (hex_to_rgb("6dcef5"), hex_to_rgb("4c91ac")),
     6: (hex_to_rgb("6dcef5"), hex_to_rgb("4c91ac")),
 }
+
+
+def vertically_concatenate_images(images: List[Image.Image]) -> Image.Image:
+    widths, heights = zip(*(i.size for i in images))
+    total_width = max(widths)
+    total_height = sum(heights)
+
+    new_image = Image.new("RGB", (total_width, total_height))
+
+    y_offset = 0
+    for image in images:
+        new_image.paste(image, (0, y_offset))
+        y_offset += image.size[1]
+
+    return new_image
+
+
+def draw_start_gaming(avatar: Image.Image, friend_name: str, game_name: str):
+    canvas = Image.open(gaming_path)
+    canvas.paste(avatar.resize((66, 66), Image.BICUBIC), (15, 20))
+
+    # 绘制名称
+    draw = ImageDraw.Draw(canvas)
+    draw.text((104, 14), friend_name, font=ImageFont.truetype(font_regular_path, 19), fill=hex_to_rgb("e3ffc2"))
+
+    # 绘制"正在玩"
+    draw.text((103, 42), "正在玩", font=ImageFont.truetype(font_regular_path, 17), fill=hex_to_rgb("969696"))
+
+    # 绘制游戏名称
+    draw.text((104, 66), game_name, font=ImageFont.truetype(font_bold_path, 14), fill=hex_to_rgb("91c257"))
+
+    return canvas
 
 
 def draw_parent_status(parent_avatar: Image.Image, parent_name: str) -> Image.Image:

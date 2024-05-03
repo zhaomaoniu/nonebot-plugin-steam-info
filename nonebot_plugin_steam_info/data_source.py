@@ -25,7 +25,7 @@ class BindData:
             self.content[parent_id] = [content]
         else:
             self.content[parent_id].append(content)
-    
+
     def remove(self, parent_id: str, user_id: str) -> None:
         if parent_id not in self.content:
             return
@@ -96,22 +96,38 @@ class SteamInfoData:
                     if player.get("gameextrainfo") != old_player.get("gameextrainfo"):
                         if player.get("gameextrainfo") is not None:
                             result.append(
-                                f"{player['personaname']} 开始玩 {player['gameextrainfo']} 了"
+                                {
+                                    "type": "start",
+                                    "player": player,
+                                    "old_player": old_player,
+                                }
                             )
                         elif old_player.get("gameextrainfo") is not None:
                             result.append(
-                                f"{player['personaname']} 停止玩 {old_player['gameextrainfo']} 了"
+                                {
+                                    "type": "stop",
+                                    "player": player,
+                                    "old_player": old_player,
+                                }
                             )
                         elif (
                             player.get("gameextrainfo") is not None
                             and old_player.get("gameextrainfo") is not None
                         ):
                             result.append(
-                                f"{player['personaname']} 停止玩 {old_player['gameextrainfo']}，开始玩 {player['gameextrainfo']} 了"
+                                {
+                                    "type": "change",
+                                    "player": player,
+                                    "old_player": old_player,
+                                }
                             )
                         else:
                             result.append(
-                                f"出现错误！{player['personaname']}\nNew: {player.get('gameextrainfo')}\nOld: {old_player.get('gameextrainfo')}"
+                                {
+                                    "type": "error",
+                                    "player": player,
+                                    "old_player": old_player,
+                                }
                             )
         return result
 

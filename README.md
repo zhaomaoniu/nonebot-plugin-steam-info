@@ -10,6 +10,7 @@
 仿照了 Steam 好友列表的样式
 
 ![image](./preview.png)
+![image](./preview_1.png)
 
 ## 使用
 | 命令 | 别名 |  说明 |
@@ -75,6 +76,7 @@
 | STEAM_API_KEY | 无 | Steam API Key，可在 [此处](https://partner.steamgames.com/doc/webapi_overview/auth) 获取 |
 | PROXY | 无 | 代理地址 |
 | STEAM_REQUEST_INTERVAL | 300 | Steam 请求间隔 & 播报间隔。单位为秒 |
+| STEAM_BROADCAST_TYPE | `"part"` | 播报类型。`"part"` 为部分播报(图 2)，`"all"` 为全部播报(图 1)，`"none"` 为只播报文字消息 |
 
 最后再把仓库中 `fonts` 文件夹下的字体文件放到 Bot 的 **运行目录** 下，配置就完毕啦
 

@@ -20,14 +20,17 @@ from nonebot_plugin_apscheduler import scheduler
 from nonebot_plugin_alconna import Text, Image, UniMessage, Target
 
 from .config import Config
-from .models import PlayerSummaries
+from .models import PlayerSummaries, Player
 from .steam import get_steam_id, get_steam_users_info, STEAM_ID_OFFSET
 from .data_source import BindData, SteamInfoData, ParentData, DisableParentData
 from .draw import (
     check_font,
+    fetch_avatar,
     image_to_bytes,
+    draw_start_gaming,
     draw_friends_status,
     simplize_steam_player_data,
+    vertically_concatenate_images,
 )
 
 
@@ -115,21 +118,49 @@ async def broadcast_steam_info(parent_id: str, steam_info: PlayerSummaries):
 
     bot = nonebot.get_bot()
 
-    msg = steam_info_data.compare(parent_id, steam_info["response"])
+    play_data = steam_info_data.compare(parent_id, steam_info["response"])
+
+    msg = []
+    for entry in play_data:
+        player: Player = entry["player"]
+        old_player: Player = entry.get("old_player")
+
+        if entry["type"] == "start":
+            msg.append(f"{player['personaname']} 开始玩 {player['gameextrainfo']} 了")
+        elif entry["type"] == "stop":
+            msg.append(f"{player['personaname']} 停止玩 {old_player['gameextrainfo']} 了")
+        elif entry["type"] == "change":
+            msg.append(
+                f"{player['personaname']} 停止玩 {old_player['gameextrainfo']}，开始玩 {player['gameextrainfo']} 了"
+            )
+        elif entry["type"] == "error":
+            f"出现错误！{player['personaname']}\nNew: {player.get('gameextrainfo')}\nOld: {old_player.get('gameextrainfo')}"
+        else:
+            logger.error(f"未知的播报类型: {entry['type']}")
 
     if msg == []:
         return None
 
-    steam_status_data = [
-        await simplize_steam_player_data(player, config.proxy, avatar_path)
-        for player in steam_info["response"]["players"]
-    ]
+    if config.steam_broadcast_type == "all":
+        steam_status_data = [
+            await simplize_steam_player_data(player, config.proxy, avatar_path)
+            for player in steam_info["response"]["players"]
+        ]
 
-    parent_avatar, parent_name = parent_data.get(parent_id)
+        parent_avatar, parent_name = parent_data.get(parent_id)
+        image = draw_friends_status(parent_avatar, parent_name, steam_status_data)
+        uni_msg = UniMessage([Text("\n".join(msg)), Image(raw=image_to_bytes(image))])
+    elif config.steam_broadcast_type == "part":
+        images = [draw_start_gaming((await fetch_avatar(entry["player"], avatar_path, config.proxy)), entry["player"]["personaname"], entry["player"]["gameextrainfo"]) for entry in play_data if entry["type"] == "start"]
+        if images == []:
+            uni_msg = UniMessage([Text("\n".join(msg))])
+        else:
+            image = vertically_concatenate_images(images) if len(images) > 1 else images[0]
+            uni_msg = UniMessage([Text("\n".join(msg)), Image(raw=image_to_bytes(image))])
+    else:
+        uni_msg = UniMessage([Text("\n".join(msg))])
 
-    image = draw_friends_status(parent_avatar, parent_name, steam_status_data)
-
-    await UniMessage([Text("\n".join(msg)), Image(raw=image_to_bytes(image))]).send(
+    await uni_msg.send(
         Target(parent_id, parent_id, True, False, "", bot.adapter.get_name()), bot
     )
 
