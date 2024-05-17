@@ -128,7 +128,9 @@ async def broadcast_steam_info(parent_id: str, steam_info: PlayerSummaries):
         if entry["type"] == "start":
             msg.append(f"{player['personaname']} 开始玩 {player['gameextrainfo']} 了")
         elif entry["type"] == "stop":
-            msg.append(f"{player['personaname']} 停止玩 {old_player['gameextrainfo']} 了")
+            msg.append(
+                f"{player['personaname']} 停止玩 {old_player['gameextrainfo']} 了"
+            )
         elif entry["type"] == "change":
             msg.append(
                 f"{player['personaname']} 停止玩 {old_player['gameextrainfo']}，开始玩 {player['gameextrainfo']} 了"
@@ -151,12 +153,24 @@ async def broadcast_steam_info(parent_id: str, steam_info: PlayerSummaries):
         image = draw_friends_status(parent_avatar, parent_name, steam_status_data)
         uni_msg = UniMessage([Text("\n".join(msg)), Image(raw=image_to_bytes(image))])
     elif config.steam_broadcast_type == "part":
-        images = [draw_start_gaming((await fetch_avatar(entry["player"], avatar_path, config.proxy)), entry["player"]["personaname"], entry["player"]["gameextrainfo"]) for entry in play_data if entry["type"] == "start"]
+        images = [
+            draw_start_gaming(
+                (await fetch_avatar(entry["player"], avatar_path, config.proxy)),
+                entry["player"]["personaname"],
+                entry["player"]["gameextrainfo"],
+            )
+            for entry in play_data
+            if entry["type"] == "start"
+        ]
         if images == []:
             uni_msg = UniMessage([Text("\n".join(msg))])
         else:
-            image = vertically_concatenate_images(images) if len(images) > 1 else images[0]
-            uni_msg = UniMessage([Text("\n".join(msg)), Image(raw=image_to_bytes(image))])
+            image = (
+                vertically_concatenate_images(images) if len(images) > 1 else images[0]
+            )
+            uni_msg = UniMessage(
+                [Text("\n".join(msg)), Image(raw=image_to_bytes(image))]
+            )
     else:
         uni_msg = UniMessage([Text("\n".join(msg))])
 
