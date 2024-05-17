@@ -280,6 +280,9 @@ def draw_friend_status(
 
 
 def draw_gaming_friends_status(data: List[Dict[str, str]]) -> Image.Image:
+    # 排序数据，按照游戏名称字母表顺序排序
+    data.sort(key=lambda x: x["status"])
+
     canvas = Image.new(
         "RGB",
         (WIDTH, 64 + (MEMBER_AVATAR_SIZE + 16) * len(data) + 16),
