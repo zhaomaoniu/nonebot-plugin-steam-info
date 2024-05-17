@@ -45,7 +45,7 @@ async def _fetch_avatar(avatar_url: str, proxy: str = None) -> Image.Image:
 
 async def fetch_avatar(player: Player, avatar_dir: Path, proxy: str = None) -> Image.Image:
     if avatar_dir is not None:
-        avatar_path = avatar_dir / f"avatar_{player['steamid']}.png"
+        avatar_path = avatar_dir / f"avatar_{player['steamid']}_{player['avatarhash']}.png"
 
         if avatar_path.exists():
             avatar = Image.open(avatar_path)
