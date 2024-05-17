@@ -26,16 +26,26 @@ async def get_steam_users_info(
         return {"response": {"players": []}}
 
     elif len(steam_ids) > 100:
-        # TODO: 分批请求
-        raise ValueError("The maximum number of steam ids is 100")
+        # 分批获取
+        result = {"response": {"players": []}}
+        for i in range(0, len(steam_ids), 100):
+            result["response"]["players"].extend(
+                (
+                    await get_steam_users_info(
+                        steam_ids[i : i + 100], steam_api_key, proxy
+                    )
+                )["response"]["players"]
+            )
+        return result
 
-    async with aiohttp.ClientSession() as session:
-        async with session.get(
-            f'http://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key={steam_api_key}&steamids={",".join(steam_ids)}',
-            proxy=proxy,
-        ) as resp:
-            if resp.status != 200:
-                raise ValueError(
-                    f"Failed to get steam users info: {resp.status}, {await resp.text()}"
-                )
-            return await resp.json()
+    else:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                f'http://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key={steam_api_key}&steamids={",".join(steam_ids)}',
+                proxy=proxy,
+            ) as resp:
+                if resp.status != 200:
+                    raise ValueError(
+                        f"Failed to get steam users info: {resp.status}, {await resp.text()}"
+                    )
+                return await resp.json()

@@ -27,3 +27,26 @@ class PlayerSummariesResponse(TypedDict):
 
 class PlayerSummaries(TypedDict):
     response: PlayerSummariesResponse
+
+
+class ProcessedPlayer(TypedDict):
+    steamid: str
+    communityvisibilitystate: int
+    personaname: str
+    profileurl: str
+    avatar: str
+    avatarmedium: str
+    avatarfull: str
+    avatarhash: str
+    lastlogoff: int
+    personastate: int
+    realname: str
+    primaryclanid: str
+    timecreated: int
+    personastateflags: int
+
+    game_start_time: int  # Unix timestamp
+
+
+class PlayerSummariesProcessedResponse(TypedDict):
+    players: List[ProcessedPlayer]

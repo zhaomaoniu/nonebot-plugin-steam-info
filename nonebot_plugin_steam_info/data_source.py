@@ -1,9 +1,10 @@
 import json
+import time
 from PIL import Image
 from pathlib import Path
 from typing import List, Dict, Optional, Tuple
 
-from .models import PlayerSummariesResponse
+from .models import PlayerSummariesProcessedResponse, Player, ProcessedPlayer
 
 
 class BindData:
@@ -57,14 +58,25 @@ class BindData:
 
         return result
 
+    def get_all_steam_id(self) -> List[str]:
+        result = []
+        for parent_id in self.content:
+            for data in self.content[parent_id]:
+                if not data["steam_id"] in result:
+                    result.append(data["steam_id"])
+        return result
+
 
 class SteamInfoData:
     def __init__(self, save_path: Path) -> None:
-        self.content: Dict[str, PlayerSummariesResponse] = {}
+        self.content: List[ProcessedPlayer] = []
         self._save_path = save_path
 
         if save_path.exists():
             self.content = json.loads(save_path.read_text("utf-8"))
+            if isinstance(self.content, dict):
+                self.content = []
+                self.save()
         else:
             self.save()
 
@@ -72,26 +84,66 @@ class SteamInfoData:
         with open(self._save_path, "w", encoding="utf-8") as f:
             json.dump(self.content, f, indent=4)
 
-    def update(self, parent_id: str, content: PlayerSummariesResponse) -> None:
-        self.content[parent_id] = content
+    def update(self, player: ProcessedPlayer) -> None:
+        self.content.append(player)
 
-    def get(self, parent_id: str) -> Optional[PlayerSummariesResponse]:
-        return self.content.get(parent_id, None)
+    def update_by_players(self, players: List[Player]):
+        # 将 Player 转换为 ProcessedPlayer
+        processed_players = []
+        for player in players:
+            old_player = self.get_player(player["steamid"])
+
+            if old_player is None:
+                if player.get("gameextrainfo") is not None:
+                    player["game_start_time"] = int(time.time())
+                else:
+                    player["game_start_time"] = None
+                processed_players.append(player)
+            else:
+                if (
+                    player.get("gameextrainfo") is not None
+                    and old_player.get("gameextrainfo") is None
+                ):
+                    # 开始游戏
+                    player["game_start_time"] = int(time.time())
+                elif (
+                    player.get("gameextrainfo") is None
+                    and old_player.get("gameextrainfo") is not None
+                ):
+                    # 结束游戏
+                    player["game_start_time"] = None
+                elif (
+                    player.get("gameextrainfo") is not None
+                    and old_player.get("gameextrainfo") is not None
+                ):
+                    # 继续游戏
+                    player["game_start_time"] = old_player["game_start_time"]
+                else:
+                    player["game_start_time"] = None
+                processed_players.append(player)
+
+        self.content = processed_players
+
+    def get_player(self, steam_id: str) -> Optional[Player]:
+        for player in self.content:
+            if player["steamid"] == steam_id:
+                return player
+        return None
+
+    def get_players(self, steam_ids: List[str]) -> List[Player]:
+        result = []
+        for player in self.content:
+            if player["steamid"] in steam_ids:
+                result.append(player)
+        return result
 
     def compare(
-        self, parent_id: str, new_content: PlayerSummariesResponse
+        self, old_players: List[Player], new_players: List[Player]
     ) -> List[str]:
-        old_content = self.get(parent_id)
-
-        if old_content is None:
-            self.update(parent_id, new_content)
-            self.save()
-            return []
-
         result = []
 
-        for player in new_content["players"]:
-            for old_player in old_content["players"]:
+        for player in new_players:
+            for old_player in old_players:
                 if player["steamid"] == old_player["steamid"]:
                     if player.get("gameextrainfo") != old_player.get("gameextrainfo"):
                         if player.get("gameextrainfo") is not None:

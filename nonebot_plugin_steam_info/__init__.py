@@ -1,13 +1,14 @@
+import time
 import aiohttp
 import nonebot
 from io import BytesIO
 from pathlib import Path
 from nonebot.log import logger
 from PIL import Image as PILImage
-from typing import Union, Optional
 from nonebot.params import Depends
 from nonebot.params import CommandArg
 from nonebot import on_command, require
+from typing import Union, Optional, List, Dict
 from nonebot.adapters import Message, Event, Bot
 from nonebot.plugin import PluginMetadata, inherit_supported_adapters
 
@@ -20,7 +21,7 @@ from nonebot_plugin_apscheduler import scheduler
 from nonebot_plugin_alconna import Text, Image, UniMessage, Target
 
 from .config import Config
-from .models import PlayerSummaries, Player
+from .models import ProcessedPlayer
 from .steam import get_steam_id, get_steam_users_info, STEAM_ID_OFFSET
 from .data_source import BindData, SteamInfoData, ParentData, DisableParentData
 from .draw import (
@@ -112,24 +113,29 @@ async def to_image_data(image: Image) -> Union[BytesIO, bytes]:
     raise ValueError("无法获取图片数据")
 
 
-async def broadcast_steam_info(parent_id: str, steam_info: PlayerSummaries):
+async def broadcast_steam_info(parent_id: str, old_players: List[ProcessedPlayer], new_players: List[ProcessedPlayer]):
     if disable_parent_data.is_disabled(parent_id):
         return None
 
     bot = nonebot.get_bot()
 
-    play_data = steam_info_data.compare(parent_id, steam_info["response"])
+    play_data = steam_info_data.compare(old_players, new_players)
 
     msg = []
     for entry in play_data:
-        player: Player = entry["player"]
-        old_player: Player = entry.get("old_player")
+        player: ProcessedPlayer = entry["player"]
+        old_player: ProcessedPlayer = entry.get("old_player")
 
         if entry["type"] == "start":
             msg.append(f"{player['personaname']} 开始玩 {player['gameextrainfo']} 了")
         elif entry["type"] == "stop":
+            time_start = old_player["game_start_time"]
+            time_stop = time.time()
+            hours = int((time_stop - time_start) / 3600)
+            minutes = int((time_stop - time_start) % 3600 / 60)
+            time_str = f"{hours} 小时 {minutes} 分钟" if hours > 0 else f"{minutes} 分钟"
             msg.append(
-                f"{player['personaname']} 停止玩 {old_player['gameextrainfo']} 了"
+                f"{player['personaname']} 玩了 {time_str} {old_player['gameextrainfo']} 后不玩了"
             )
         elif entry["type"] == "change":
             msg.append(
@@ -146,7 +152,7 @@ async def broadcast_steam_info(parent_id: str, steam_info: PlayerSummaries):
     if config.steam_broadcast_type == "all":
         steam_status_data = [
             await simplize_steam_player_data(player, config.proxy, avatar_path)
-            for player in steam_info["response"]["players"]
+            for player in new_players
         ]
 
         parent_avatar, parent_name = parent_data.get(parent_id)
@@ -178,35 +184,31 @@ async def broadcast_steam_info(parent_id: str, steam_info: PlayerSummaries):
         Target(parent_id, parent_id, True, False, "", bot.adapter.get_name()), bot
     )
 
-
-@nonebot.get_driver().on_bot_connect
-async def init_steam_info():
-    for parent_id in bind_data.content:
-        steam_ids = bind_data.get_all(parent_id)
-
-        steam_info = await get_steam_users_info(
-            steam_ids, config.steam_api_key, config.proxy
-        )
-
-        steam_info_data.update(parent_id, steam_info["response"])
-        steam_info_data.save()
-
-
 @scheduler.scheduled_job(
     "interval", minutes=config.steam_request_interval / 60, id="update_steam_info"
 )
+@nonebot.get_driver().on_bot_connect
 async def update_steam_info():
-    for parent_id in bind_data.content:
+    steam_ids = bind_data.get_all_steam_id()
+
+    steam_info = await get_steam_users_info(
+        steam_ids, config.steam_api_key, config.proxy
+    )
+
+    old_players_dict: Dict[str, List[ProcessedPlayer]] = {}
+
+    for parent_id in bind_data.content.keys():
         steam_ids = bind_data.get_all(parent_id)
+        old_players_dict[parent_id] = steam_info_data.get_players(steam_ids)
 
-        steam_info = await get_steam_users_info(
-            steam_ids, config.steam_api_key, config.proxy
-        )
+    steam_info_data.update_by_players(steam_info["response"]["players"])
+    steam_info_data.save()
 
-        await broadcast_steam_info(parent_id, steam_info)
+    for parent_id in bind_data.content.keys():
+        old_players = old_players_dict[parent_id]
+        new_players = steam_info_data.get_players(bind_data.get_all(parent_id))
 
-        steam_info_data.update(parent_id, steam_info["response"])
-        steam_info_data.save()
+        await broadcast_steam_info(parent_id, old_players, new_players)
 
 
 @bind.handle()
