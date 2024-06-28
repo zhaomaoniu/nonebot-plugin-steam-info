@@ -23,6 +23,7 @@
 | steamupdate [名称] [图片] | 更新群信息 | 更新群聊头像和名称 |
 | steamenable | 启用steam | 启用群友状态播报 |
 | steamdisable | 禁用steam | 禁用群友状态播报 |
+| steamnickname [昵称] | steam昵称 | 设置 Steam 玩家昵称，用于辨识 Steam 名称与群昵称不一致的群友 |
 
 > 记得加上你配置的命令头哦
 

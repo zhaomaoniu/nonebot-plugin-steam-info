@@ -41,7 +41,7 @@ from .utils import (
 __plugin_meta__ = PluginMetadata(
     name="Steam Info",
     description="播报绑定的 Steam 好友状态",
-    usage="绑定 Steam ID: steambind [Steam ID 或 Steam好友代码]\n解绑 Steam ID: steamunbind\n查看 Steam ID: steaminfo\n查看 Steam 好友状态: steamcheck\n启用 Steam 播报: steamenable\n禁用 Steam 播报: steamdisable\n更新群信息: steamupdate",
+    usage="绑定 Steam ID: steambind [Steam ID 或 Steam好友代码]\n解绑 Steam ID: steamunbind\n查看 Steam ID: steaminfo\n查看 Steam 好友状态: steamcheck\n启用 Steam 播报: steamenable\n禁用 Steam 播报: steamdisable\n更新群信息: steamupdate\n设置玩家昵称: steamnickname [昵称]",
     type="application",
     homepage="https://github.com/zhaomaoniu/nonebot-plugin-steam-info",
     config=Config,
