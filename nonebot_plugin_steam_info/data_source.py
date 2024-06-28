@@ -2,9 +2,9 @@ import json
 import time
 from PIL import Image
 from pathlib import Path
-from typing import List, Dict, Optional, Tuple
+from typing import Any, List, Dict, Optional, Tuple
 
-from .models import PlayerSummariesProcessedResponse, Player, ProcessedPlayer
+from .models import Player, ProcessedPlayer
 
 
 class BindData:
@@ -43,6 +43,20 @@ class BindData:
             return None
         for data in self.content[parent_id]:
             if data["user_id"] == user_id:
+                if not data.get("nickname"):
+                    data["nickname"] = None
+                return data
+        return None
+
+    def get_by_steam_id(
+        self, parent_id: str, steam_id: str
+    ) -> Optional[Dict[str, str]]:
+        if parent_id not in self.content:
+            return None
+        for data in self.content[parent_id]:
+            if data["steam_id"] == steam_id:
+                if not data.get("nickname"):
+                    data["nickname"] = None
                 return data
         return None
 
@@ -139,7 +153,7 @@ class SteamInfoData:
 
     def compare(
         self, old_players: List[Player], new_players: List[Player]
-    ) -> List[str]:
+    ) -> List[Dict[str, Any]]:
         result = []
 
         for player in new_players:

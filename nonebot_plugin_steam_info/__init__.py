@@ -26,12 +26,15 @@ from .steam import get_steam_id, get_steam_users_info, STEAM_ID_OFFSET
 from .data_source import BindData, SteamInfoData, ParentData, DisableParentData
 from .draw import (
     check_font,
-    fetch_avatar,
-    image_to_bytes,
     draw_start_gaming,
     draw_friends_status,
-    simplize_steam_player_data,
     vertically_concatenate_images,
+)
+from .utils import (
+    fetch_avatar,
+    image_to_bytes,
+    simplize_steam_player_data,
+    convert_player_name_to_nickname,
 )
 
 
@@ -53,6 +56,7 @@ check = on_command("steamcheck", aliases={"查看steam", "查steam"}, priority=1
 enable = on_command("steamenable", aliases={"启用steam"}, priority=10)
 disable = on_command("steamdisable", aliases={"禁用steam"}, priority=10)
 update_parent_info = on_command("steamupdate", aliases={"更新群信息"}, priority=10)
+set_nickname = on_command("steamnickname", aliases={"steam昵称"}, priority=10)
 
 
 if hasattr(nonebot, "get_plugin_config"):
@@ -157,7 +161,11 @@ async def broadcast_steam_info(
 
     if config.steam_broadcast_type == "all":
         steam_status_data = [
-            await simplize_steam_player_data(player, config.proxy, avatar_path)
+            convert_player_name_to_nickname(
+                (await simplize_steam_player_data(player, config.proxy, avatar_path)),
+                parent_id,
+                bind_data,
+            )
             for player in new_players
         ]
 
@@ -170,6 +178,9 @@ async def broadcast_steam_info(
                 (await fetch_avatar(entry["player"], avatar_path, config.proxy)),
                 entry["player"]["personaname"],
                 entry["player"]["gameextrainfo"],
+                bind_data.get_by_steam_id(parent_id, entry["player"]["steamid"])[
+                    "nickname"
+                ],
             )
             for entry in play_data
             if entry["type"] == "start"
@@ -239,7 +250,10 @@ async def bind_handle(
 
         await bind.finish(f"已更新你的 Steam ID 为 {steam_id}")
     else:
-        bind_data.add(parent_id, {"user_id": event.get_user_id(), "steam_id": steam_id})
+        bind_data.add(
+            parent_id,
+            {"user_id": event.get_user_id(), "steam_id": steam_id, "nickname": None},
+        )
         bind_data.save()
 
         await bind.finish(f"已绑定你的 Steam ID 为 {steam_id}")
@@ -296,7 +310,11 @@ async def check_handle(
     parent_avatar, parent_name = parent_data.get(parent_id)
 
     steam_status_data = [
-        await simplize_steam_player_data(player, config.proxy, avatar_path)
+        convert_player_name_to_nickname(
+            (await simplize_steam_player_data(player, config.proxy, avatar_path)),
+            parent_id,
+            bind_data,
+        )
         for player in steam_info["response"]["players"]
     ]
 
@@ -345,3 +363,27 @@ async def disable_handle(target: Target = Depends(get_target)):
     disable_parent_data.save()
 
     await disable.finish("已禁用 Steam 播报")
+
+
+@set_nickname.handle()
+async def set_nickname_handle(
+    event: Event, target: Target = Depends(get_target), cmd_arg: Message = CommandArg()
+):
+    parent_id = target.parent_id or target.id
+
+    nickname = cmd_arg.extract_plain_text().strip()
+
+    if nickname == "":
+        await set_nickname.finish("请输入昵称，格式: steamnickname [昵称]")
+
+    user_data = bind_data.get(parent_id, event.get_user_id())
+
+    if user_data is None:
+        await set_nickname.finish(
+            "未绑定 Steam ID，请先使用 steambind 绑定 Steam ID 后再设置昵称"
+        )
+
+    user_data["nickname"] = nickname
+    bind_data.save()
+
+    await set_nickname.finish(f"已设置你的昵称为 {nickname}，将在 Steam 播报中显示")
