@@ -113,7 +113,11 @@ async def to_image_data(image: Image) -> Union[BytesIO, bytes]:
     raise ValueError("无法获取图片数据")
 
 
-async def broadcast_steam_info(parent_id: str, old_players: List[ProcessedPlayer], new_players: List[ProcessedPlayer]):
+async def broadcast_steam_info(
+    parent_id: str,
+    old_players: List[ProcessedPlayer],
+    new_players: List[ProcessedPlayer],
+):
     if disable_parent_data.is_disabled(parent_id):
         return None
 
@@ -133,7 +137,9 @@ async def broadcast_steam_info(parent_id: str, old_players: List[ProcessedPlayer
             time_stop = time.time()
             hours = int((time_stop - time_start) / 3600)
             minutes = int((time_stop - time_start) % 3600 / 60)
-            time_str = f"{hours} 小时 {minutes} 分钟" if hours > 0 else f"{minutes} 分钟"
+            time_str = (
+                f"{hours} 小时 {minutes} 分钟" if hours > 0 else f"{minutes} 分钟"
+            )
             msg.append(
                 f"{player['personaname']} 玩了 {time_str} {old_player['gameextrainfo']} 后不玩了"
             )
@@ -183,6 +189,7 @@ async def broadcast_steam_info(parent_id: str, old_players: List[ProcessedPlayer
     await uni_msg.send(
         Target(parent_id, parent_id, True, False, "", bot.adapter.get_name()), bot
     )
+
 
 @scheduler.scheduled_job(
     "interval", minutes=config.steam_request_interval / 60, id="update_steam_info"
