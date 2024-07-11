@@ -205,7 +205,6 @@ async def broadcast_steam_info(
 @scheduler.scheduled_job(
     "interval", minutes=config.steam_request_interval / 60, id="update_steam_info"
 )
-@nonebot.get_driver().on_bot_connect
 async def update_steam_info():
     steam_ids = bind_data.get_all_steam_id()
 
@@ -227,6 +226,12 @@ async def update_steam_info():
         new_players = steam_info_data.get_players(bind_data.get_all(parent_id))
 
         await broadcast_steam_info(parent_id, old_players, new_players)
+
+
+if not config.steam_disable_broadcast_on_startup:
+    nonebot.get_driver().on_bot_connect(update_steam_info)
+else:
+    logger.info("已禁用启动时的 Steam 播报")
 
 
 @bind.handle()
