@@ -202,9 +202,6 @@ async def broadcast_steam_info(
     )
 
 
-@scheduler.scheduled_job(
-    "interval", minutes=config.steam_request_interval / 60, id="update_steam_info"
-)
 async def update_steam_info():
     steam_ids = bind_data.get_all_steam_id()
 
@@ -220,6 +217,15 @@ async def update_steam_info():
 
     steam_info_data.update_by_players(steam_info["response"]["players"])
     steam_info_data.save()
+
+    return bind_data
+
+
+@scheduler.scheduled_job(
+    "interval", minutes=config.steam_request_interval / 60, id="update_steam_info"
+)
+async def fetch_and_broadcast_steam_info():
+    bind_data = await update_steam_info()
 
     for parent_id in bind_data.content.keys():
         old_players = old_players_dict[parent_id]
