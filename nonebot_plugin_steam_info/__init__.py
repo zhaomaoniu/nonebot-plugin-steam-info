@@ -218,14 +218,14 @@ async def update_steam_info():
     steam_info_data.update_by_players(steam_info["response"]["players"])
     steam_info_data.save()
 
-    return bind_data
+    return bind_data, old_players_dict
 
 
 @scheduler.scheduled_job(
     "interval", minutes=config.steam_request_interval / 60, id="update_steam_info"
 )
 async def fetch_and_broadcast_steam_info():
-    bind_data = await update_steam_info()
+    bind_data, old_players_dict = await update_steam_info()
 
     for parent_id in bind_data.content.keys():
         old_players = old_players_dict[parent_id]
