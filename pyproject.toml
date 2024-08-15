@@ -1,6 +1,6 @@
 [project]
 name = "nonebot-plugin-steam-info"
-version = "1.2.0"
+version = "1.2.2"
 description = "Default template for PDM package"
 authors = [
     {name = "zhaomaoniu", email = "2667292003@qq.com"},
