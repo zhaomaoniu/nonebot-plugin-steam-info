@@ -1,25 +1,25 @@
 import time
-import aiohttp
+import httpx
 import calendar
 from PIL import Image
 from io import BytesIO
-from typing import Dict
 from pathlib import Path
+from typing import Dict, Optional
 
 from .models import Player
 from .data_source import BindData
 
 
 async def _fetch_avatar(avatar_url: str, proxy: str = None) -> Image.Image:
-    async with aiohttp.ClientSession() as session:
-        async with session.get(avatar_url, proxy=proxy) as resp:
-            if resp.status != 200:
-                return Image.open(Path(__file__).parent / "res/unknown_avatar.jpg")
-            return Image.open(BytesIO(await resp.read()))
+    async with httpx.AsyncClient(proxy=proxy) as client:
+        response = await client.get(avatar_url)
+        if response.status_code != 200:
+            return Image.open(Path(__file__).parent / "res/unknown_avatar.jpg")
+        return Image.open(BytesIO(response.content))
 
 
 async def fetch_avatar(
-    player: Player, avatar_dir: Path, proxy: str = None
+    player: Player, avatar_dir: Optional[Path], proxy: str = None
 ) -> Image.Image:
     if avatar_dir is not None:
         avatar_path = (

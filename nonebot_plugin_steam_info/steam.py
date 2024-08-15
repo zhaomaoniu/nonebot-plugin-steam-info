@@ -1,4 +1,4 @@
-import aiohttp
+import httpx
 from typing import List
 from nonebot.log import logger
 
@@ -30,25 +30,24 @@ async def get_steam_users_info(
         # 分批获取
         result = {"response": {"players": []}}
         for i in range(0, len(steam_ids), 100):
-            result["response"]["players"].extend(
-                (
-                    await get_steam_users_info(
-                        steam_ids[i : i + 100], steam_api_key, proxy
-                    )
-                )["response"]["players"]
+            batch_result = await get_steam_users_info(
+                steam_ids[i : i + 100], steam_api_key, proxy
             )
+            result["response"]["players"].extend(batch_result["response"]["players"])
         return result
 
     for api_key in steam_api_key:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
-                f'http://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key={api_key}&steamids={",".join(steam_ids)}',
-                proxy=proxy,
-            ) as resp:
-                if resp.status == 200:
-                    return await resp.json()
+        try:
+            async with httpx.AsyncClient(proxy=proxy) as client:
+                response = await client.get(
+                    f'http://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key={api_key}&steamids={",".join(steam_ids)}'
+                )
+                if response.status_code == 200:
+                    return response.json()
                 else:
                     logger.warning(f"API key {api_key} failed to get steam users info.")
+        except httpx.RequestError as exc:
+            logger.warning(f"API key {api_key} encountered an error: {exc}")
 
     logger.error("All API keys failed to get steam users info.")
     return {"response": {"players": []}}

@@ -8,10 +8,10 @@ authors = [
 dependencies = [
     "nonebot2>=2.2.0",
     "nonebot-plugin-alconna>=0.37.0",
-    "aiohttp>=3.9.3",
     "Pillow>=10.2.0",
     "nonebot-plugin-apscheduler>=0.4.0",
     "nonebot-plugin-localstore>=0.6.0",
+    "httpx>=0.27.0",
 ]
 requires-python = ">=3.8"
 readme = "README.md"

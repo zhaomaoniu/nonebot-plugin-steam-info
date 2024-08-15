@@ -1,5 +1,5 @@
 import time
-import aiohttp
+import httpx
 import nonebot
 from io import BytesIO
 from pathlib import Path
@@ -108,11 +108,11 @@ async def to_image_data(image: Image) -> Union[BytesIO, bytes]:
         return Path(image.path).read_bytes()
 
     if image.url is not None:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(image.url) as resp:
-                if resp.status != 200:
-                    raise ValueError(f"无法获取图片数据: {resp.status}")
-                return await resp.read()
+        async with httpx.AsyncClient() as client:
+            response = await client.get(image.url)
+            if response.status_code != 200:
+                raise ValueError(f"无法获取图片数据: {response.status_code}")
+            return response.content
 
     raise ValueError("无法获取图片数据")
 
