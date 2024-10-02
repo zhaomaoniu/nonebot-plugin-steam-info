@@ -22,8 +22,16 @@ from nonebot_plugin_alconna import Text, Image, UniMessage, Target
 
 from .config import Config
 from .models import ProcessedPlayer
-from .steam import get_steam_id, get_steam_users_info, STEAM_ID_OFFSET
 from .data_source import BindData, SteamInfoData, ParentData, DisableParentData
+from .steam import (
+    get_steam_id,
+    get_game_header,
+    get_owned_games,
+    STEAM_ID_OFFSET,
+    get_games_details,
+    get_user_background,
+    get_steam_users_info,
+)
 from .draw import (
     check_font,
     draw_start_gaming,
@@ -45,7 +53,7 @@ __plugin_meta__ = PluginMetadata(
 steamhelp: 查看帮助
 steambind [Steam ID 或 Steam 好友代码]: 绑定 Steam ID
 steamunbind: 解绑 Steam ID
-steaminfo: 查看 Steam ID
+steaminfo [Steam ID 活 Steam好友代码]: 查看 Steam 账号信息
 steamcheck: 查看 Steam 好友状态
 steamenable: 启用 Steam 播报
 steamdisable: 禁用 Steam 播报
@@ -87,6 +95,7 @@ disable_parent_data_path = store.get_data_file(
     "nonebot_plugin_steam_info", "disable_parent_data.json"
 )
 avatar_path = store.get_cache_dir("nonebot_plugin_steam_info")
+cache_path = avatar_path
 
 bind_data = BindData(bind_data_path)
 steam_info_data = SteamInfoData(steam_info_data_path)
@@ -304,20 +313,58 @@ async def unbind_handle(event: Event, target: Target = Depends(get_target)):
 
 
 @info.handle()
-async def info_handle(event: Event, target: Target = Depends(get_target)):
+async def info_handle(
+    event: Event, target: Target = Depends(get_target), arg: Message = CommandArg()
+):
     parent_id = target.parent_id or target.id
 
-    if user_data := bind_data.get(parent_id, event.get_user_id()):
+    if arg.extract_plain_text().strip() != "":
+        steam_id = int(arg.extract_plain_text().strip())
+        if steam_id < STEAM_ID_OFFSET:
+            steam_friend_code = steam_id
+            steam_id += STEAM_ID_OFFSET
+        else:
+            steam_friend_code = steam_id - STEAM_ID_OFFSET
+    else:
+        user_data = bind_data.get(parent_id, event.get_user_id())
+
+        if user_data is None:
+            await info.finish(
+                "未绑定 Steam ID, 请使用 “steambind [Steam ID 或 Steam好友代码]” 绑定 Steam ID"
+            )
+
         steam_id = user_data["steam_id"]
         steam_friend_code = str(int(steam_id) - STEAM_ID_OFFSET)
 
-        await info.finish(
-            f"你的 Steam ID: {steam_id}\n你的 Steam 好友代码: {steam_friend_code}"
-        )
-    else:
-        await info.finish(
-            "未绑定 Steam ID, 请使用 “steambind [Steam ID 或 Steam好友代码]” 绑定 Steam ID"
-        )
+    owned_game_response = await get_owned_games(
+        steam_id, config.steam_api_key, config.proxy
+    )
+    owned_games = owned_game_response["response"]["games"]
+    game_number = len(owned_games)
+    owned_games.sort(key=lambda x: x["rtime_last_played"], reverse=True)
+
+    # game_details = await get_games_details(
+    #     [game["appid"] for game in owned_games], cache_path, config.proxy
+    # )
+    # data = {game["data"]["steam_appid"]: game["data"] for game in game_details.values()}
+
+    # 选出 3 个最新运行的游戏
+    games = [game["appid"] for game in owned_games[:3]]
+    game_details = await get_games_details(games, cache_path, config.proxy)
+
+    if game_details is None:
+        await info.finish("获取游戏信息失败，请联系管理员查看日志")
+
+    game_headers = {appid: await get_game_header(appid, cache_path, config.proxy) for appid in games}
+    player_background = await get_user_background(steam_id, config.proxy)
+
+    if any(v is None for v in game_headers.values()):
+        await info.finish("获取游戏封面失败，请联系管理员查看日志")
+
+    await info.finish(
+        f"你的 Steam ID: {steam_id}\n你的 Steam 好友代码: {steam_friend_code}\n"
+        f"你一共拥有 {game_number} 款游戏\n"
+    )
 
 
 @check.handle()

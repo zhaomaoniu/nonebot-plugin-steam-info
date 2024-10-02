@@ -1,6 +1,6 @@
 from pathlib import Path
 from typing import List, Dict
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageFilter
 
 from .utils import hex_to_rgb
 
@@ -57,7 +57,9 @@ def vertically_concatenate_images(images: List[Image.Image]) -> Image.Image:
     return new_image
 
 
-def draw_start_gaming(avatar: Image.Image, friend_name: str, game_name: str, nickname: str = None):
+def draw_start_gaming(
+    avatar: Image.Image, friend_name: str, game_name: str, nickname: str = None
+):
     canvas = Image.open(gaming_path)
     canvas.paste(avatar.resize((66, 66), Image.BICUBIC), (15, 20))
 
@@ -155,7 +157,9 @@ def draw_friend_status(
 
     draw = ImageDraw.Draw(canvas)
 
-    display_name = f"{friend_name} ({nickname})" if nickname is not None else friend_name
+    display_name = (
+        f"{friend_name} ({nickname})" if nickname is not None else friend_name
+    )
 
     if personastate == 2:
         # 忙碌 加上一个忙碌图标
@@ -238,7 +242,9 @@ def draw_gaming_friends_status(data: List[Dict[str, str]]) -> Image.Image:
 
     # 绘制好友头像和名称
     friends_status_list = [
-        draw_friend_status(d["avatar"], d["name"], d["status"], d["personastate"], d["nickname"])
+        draw_friend_status(
+            d["avatar"], d["name"], d["status"], d["personastate"], d["nickname"]
+        )
         for d in data
     ]
 
@@ -276,7 +282,9 @@ def draw_online_friends_status(data: List[Dict[str, str]]) -> Image.Image:
 
     # 绘制好友头像和名称
     friends_status_list = [
-        draw_friend_status(d["avatar"], d["name"], d["status"], d["personastate"], d["nickname"])
+        draw_friend_status(
+            d["avatar"], d["name"], d["status"], d["personastate"], d["nickname"]
+        )
         for d in data
     ]
 
@@ -314,7 +322,9 @@ def draw_offline_friends_status(data: List[Dict[str, str]]) -> Image.Image:
 
     # 绘制好友头像和名称
     friends_status_list = [
-        draw_friend_status(d["avatar"], d["name"], d["status"], d["personastate"], d["nickname"])
+        draw_friend_status(
+            d["avatar"], d["name"], d["status"], d["personastate"], d["nickname"]
+        )
         for d in data
     ]
 
@@ -386,3 +396,32 @@ def draw_friends_status(
             draw.rectangle([0, y - 1, WIDTH, y], fill=hex_to_rgb("333439"))
 
     return canvas
+
+
+def create_acrylic_background_from_image(
+    image: Image.Image, blur_radius: int = 10
+) -> Image.Image:
+    # 创建一个高斯模糊的背景
+    blurred_image = image.filter(ImageFilter.GaussianBlur(blur_radius))
+
+    # 创建一个透明背景
+    acrylic_background = Image.new("RGBA", image.size, (0, 0, 0, 0))
+
+    # 将高斯模糊的背景粘贴到透明背景上
+    acrylic_background.paste(blurred_image, (0, 0))
+
+    # 裁切图片，保留中间的960ximage.height的部分
+    acrylic_background = acrylic_background.crop(
+        (
+            (acrylic_background.width - 960) // 2,
+            0,
+            (acrylic_background.width + 960) // 2,
+            acrylic_background.height,
+        )
+    )
+
+    return acrylic_background
+
+
+if __name__ == "__main__":
+    create_acrylic_background_from_image(Image.open(r"D:\assets\murasame.png")).show()

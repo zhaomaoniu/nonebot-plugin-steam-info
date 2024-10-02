@@ -1,5 +1,7 @@
 import time
+import pytz
 import httpx
+import datetime
 import calendar
 from PIL import Image
 from io import BytesIO
@@ -38,7 +40,9 @@ async def fetch_avatar(
     return avatar
 
 
-def convert_player_name_to_nickname(data: Dict[str, str], parent_id: str, bind_data: BindData) -> Dict[str, str]:
+def convert_player_name_to_nickname(
+    data: Dict[str, str], parent_id: str, bind_data: BindData
+) -> Dict[str, str]:
     data["nickname"] = bind_data.get_by_steam_id(parent_id, data["steamid"])["nickname"]
     return data
 
@@ -98,3 +102,11 @@ def image_to_bytes(image: Image.Image) -> bytes:
 
 def hex_to_rgb(hex_color: str):
     return tuple(int(hex_color[i : i + 2], 16) for i in (0, 2, 4))
+
+
+def convert_timestamp_to_beijing_time(timestamp: int) -> str:
+    beijing_timezone = pytz.timezone("Asia/Shanghai")
+    date_utc = datetime.datetime.fromtimestamp(timestamp, pytz.utc)
+    date_beijing = date_utc.astimezone(beijing_timezone)
+    return date_beijing.strftime("%Y-%m-%d %H:%M:%S")
+    # example: 2021-09-06 21:00:00
