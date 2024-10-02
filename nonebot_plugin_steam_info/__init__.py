@@ -41,7 +41,17 @@ from .utils import (
 __plugin_meta__ = PluginMetadata(
     name="Steam Info",
     description="播报绑定的 Steam 好友状态",
-    usage="绑定 Steam ID: steambind [Steam ID 或 Steam好友代码]\n解绑 Steam ID: steamunbind\n查看 Steam ID: steaminfo\n查看 Steam 好友状态: steamcheck\n启用 Steam 播报: steamenable\n禁用 Steam 播报: steamdisable\n更新群信息: steamupdate\n设置玩家昵称: steamnickname [昵称]",
+    usage="""
+steamhelp: 查看帮助
+steambind [Steam ID 或 Steam 好友代码]: 绑定 Steam ID
+steamunbind: 解绑 Steam ID
+steaminfo: 查看 Steam ID
+steamcheck: 查看 Steam 好友状态
+steamenable: 启用 Steam 播报
+steamdisable: 禁用 Steam 播报
+steamupdate [名称] [图片]: 更新群信息
+steamnickname [昵称]: 设置玩家昵称
+""".strip(),
     type="application",
     homepage="https://github.com/zhaomaoniu/nonebot-plugin-steam-info",
     config=Config,
@@ -49,6 +59,7 @@ __plugin_meta__ = PluginMetadata(
 )
 
 
+help = on_command("steamhelp", aliases={"steam帮助"}, priority=10)
 bind = on_command("steambind", aliases={"绑定steam"}, priority=10)
 unbind = on_command("steamunbind", aliases={"解绑steam"}, priority=10)
 info = on_command("steaminfo", aliases={"steam信息"}, priority=10)
@@ -194,8 +205,11 @@ async def broadcast_steam_info(
             uni_msg = UniMessage(
                 [Text("\n".join(msg)), Image(raw=image_to_bytes(image))]
             )
-    else:
+    elif config.steam_broadcast_type == "none":
         uni_msg = UniMessage([Text("\n".join(msg))])
+    else:
+        logger.error(f"未知的播报类型: {config.steam_broadcast_type}")
+        return None
 
     await uni_msg.send(
         Target(parent_id, parent_id, True, False, "", bot.adapter.get_name()), bot
@@ -238,6 +252,11 @@ if not config.steam_disable_broadcast_on_startup:
     nonebot.get_driver().on_bot_connect(update_steam_info)
 else:
     logger.info("已禁用启动时的 Steam 播报")
+
+
+@help.handle()
+async def help_handle():
+    await help.finish(__plugin_meta__.usage)
 
 
 @bind.handle()
