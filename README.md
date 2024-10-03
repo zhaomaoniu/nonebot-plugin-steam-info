@@ -1,24 +1,33 @@
 # Nonebot-Plugin-Steam-Info
 ✨ Steam 好友状态播报 NoneBot 插件 ✨
 
+## 介绍
+
+这是一个基于 NoneBot2 的 Steam 好友状态播报插件，可以绑定 Steam ID，查询群友状态，展示个人 Steam 主页等功能，支持跨平台，画图部分 100% 使用 Pillow 实现，较无头浏览器渲染更加轻量高效
+
 ## 功能
 - [x] 绑定 Steam ID
 - [x] 群友状态变更播报
 - [x] 群友游戏时间播报
 - [x] 主动查询群友状态
+- [x] 展示个人 Steam 主页
 
 ## 预览
 仿照了 Steam 好友列表的样式
 
 ![image](./preview.png)
+<sub>图 1. 部分播报</sub>
 ![image](./preview_1.png)
+<sub>图 2. 全部播报</sub>
+![image](./preview_2.png)
+<sub>图 3. 个人 Steam 主页</sub>
 
 ## 使用
 | 命令 | 别名 |  说明 |
 | --- | --- | --- |
 | steambind [Steam ID 或 Steam好友代码] | 绑定steam | 绑定 Steam |
 | steamunbind | 解绑steam | 解绑 Steam |
-| steaminfo | steam信息 | 查看绑定信息 |
+| steaminfo (可选)[@某人 或 Steam ID 或 Steam好友代码] | steam信息 | 查看个人主页 |
 | steamcheck | 查看steam, 查steam | 查询群友 Steam 状态 |
 | steamupdate [名称] [图片] | 更新群信息 | 更新群聊头像和名称 |
 | steamenable | 启用steam | 启用群友状态播报 |

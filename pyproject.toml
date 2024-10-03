@@ -12,6 +12,8 @@ dependencies = [
     "nonebot-plugin-apscheduler>=0.4.0",
     "nonebot-plugin-localstore>=0.6.0",
     "httpx>=0.27.0",
+    "numpy>=1.24.4",
+    "beautifulsoup4>=4.12.3",
 ]
 requires-python = ">=3.8"
 readme = "README.md"

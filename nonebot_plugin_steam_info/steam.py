@@ -1,11 +1,11 @@
 import re
-import json
 import httpx
 from pathlib import Path
+from bs4 import BeautifulSoup
 from nonebot.log import logger
 from typing import List, Optional, Dict
 
-from .models import PlayerSummaries, OwnedGames, AppDetails
+from .models import PlayerSummaries, PlayerData
 
 
 STEAM_ID_OFFSET = 76561197960265728
@@ -56,180 +56,185 @@ async def get_steam_users_info(
     return {"response": {"players": []}}
 
 
-async def get_owned_games(
-    steam_id: str, steam_api_key: List[str], proxy: str = None
-) -> OwnedGames:
-    for api_key in steam_api_key:
-        try:
-            async with httpx.AsyncClient(proxy=proxy) as client:
-                response = await client.get(
-                    f"http://api.steampowered.com/IPlayerService/GetOwnedGames/v0001/?key={api_key}&steamid={steam_id}&include_appinfo=true"
-                )
-                if response.status_code == 200:
-                    return response.json()
-                else:
-                    logger.warning(f"API key {api_key} failed to get owned games.")
-        except httpx.RequestError as exc:
-            logger.warning(f"API key {api_key} encountered an error: {exc}")
-
-    logger.error("All API keys failed to get owned games.")
-
-
-async def get_game_header(
-    appid: int, cache_path: Path, proxy: str = None
-) -> Optional[bytes]:
-    # check cache
-    if (cache_path / f"{appid}_header.jpg").exists():
-        return (cache_path / f"{appid}_header.jpg").read_bytes()
-
-    result = None
-    try:
-        async with httpx.AsyncClient(proxy=proxy) as client:
-            response = await client.get(
-                f"https://shared.steamstatic.com/store_item_assets/steam/apps/{appid}/header_schinese.jpg"
-            )
-            if response.status_code == 200:
-                result = response.content
-            else:
-                response = await client.get(
-                    f"https://shared.steamstatic.com/store_item_assets/steam/apps/{appid}/header.jpg"
-                )
-                if response.status_code == 200:
-                    result = response.content
-                else:
-                    response.raise_for_status()
-        # cache the image
-        (cache_path / f"{appid}_header.jpg").write_bytes(result)
-        return result
-
-    except httpx.RequestError as exc:
-        logger.error(f"Failed to get game header: {exc}")
-        return None
-
-
-async def get_game_icon(
-    appid: int, hash: str, cache_path: Path, proxy: str = None
-) -> Optional[bytes]:
-    # check cache
-    if (cache_path / f"{appid}_{hash}_icon.jpg").exists():
-        return (cache_path / f"{appid}_{hash}_icon.jpg").read_bytes()
-
-    result = None
-    try:
-        async with httpx.AsyncClient(proxy=proxy) as client:
-            response = await client.get(
-                f"https://media.steampowered.com/steamcommunity/public/images/apps/{appid}/{hash}.jpg"
-            )
-            if response.status_code == 200:
-                result = response.content
-            else:
-                response.raise_for_status()
-        # cache the image
-        (cache_path / f"{appid}_{hash}_icon.jpg").write_bytes(result)
-        return result
-
-    except httpx.RequestError as exc:
-        logger.error(f"Failed to get game icon: {exc}")
-        return None
-
-
-async def get_games_details(
-    appids: List[int], cache_path: Path, proxy: str = None
-) -> Optional[Dict[int, AppDetails]]:
-    result = {}
-
-    for appid in appids:
-        cache_file = cache_path / f"{appid}_appdetails.json"
-
-        # check cache
-        if cache_file.exists():
-            try:
-                with open(cache_file, "r", encoding="utf-8") as f:
-                    result[appid] = json.load(f)
-                    continue
-            except json.JSONDecodeError:
-                logger.warning(f"Failed to read cache file {cache_file}")
-
-        try:
-            async with httpx.AsyncClient(
-                proxy=proxy,
-                headers={
-                    "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6"
-                },
-            ) as client:
-                response = await client.get(
-                    f"https://store.steampowered.com/api/appdetails?appids={appid}"
-                )
-                if response.status_code == 200:
-                    try:
-                        appdetails = response.json()[str(appid)]
-                    except json.JSONDecodeError:
-                        logger.warning(
-                            f"Failed to parse game details for appid {appid}"
-                        )
-                        continue
-                    if not appdetails["success"]:
-                        logger.warning(f"Failed to get game details for appid {appid}")
-                        continue
-                    result[appid] = appdetails
-                    # cache the result
-                    with open(cache_file, "w", encoding="utf-8") as f:
-                        json.dump(appdetails, f, ensure_ascii=False)
-                else:
-                    response.raise_for_status()
-        except httpx.RequestError as exc:
-            logger.error(f"Failed to get game details for appid {appid}: {exc}")
-            return None
-
-    return result
-
-
-async def get_user_data(steam_id: int, proxy: str = None) -> Dict:
-    url = f"https://steamcommunity.com/profiles/{steam_id}"
-    default_background = (Path(__file__).parent / "res/bg_dots.png").read_bytes()
-
+async def _fetch(
+    url: str, default: bytes, cache_file: Optional[Path] = None, proxy: str = None
+) -> bytes:
+    if cache_file is not None and cache_file.exists():
+        return cache_file.read_bytes()
     try:
         async with httpx.AsyncClient(proxy=proxy) as client:
             response = await client.get(url)
             if response.status_code == 200:
+                if cache_file is not None:
+                    cache_file.write_bytes(response.content)
+                return response.content
+            else:
+                response.raise_for_status()
+    except Exception as exc:
+        logger.error(f"Failed to get image: {exc}")
+        return default
+
+
+async def get_user_data(
+    steam_id: int, cache_path: Path, proxy: str = None
+) -> PlayerData:
+    url = f"https://steamcommunity.com/profiles/{steam_id}"
+    default_background = (Path(__file__).parent / "res/bg_dots.png").read_bytes()
+    default_avatar = (Path(__file__).parent / "res/unknown_avatar.jpg").read_bytes()
+    default_achievement_image = (
+        Path(__file__).parent / "res/default_achievement_image.png"
+    ).read_bytes()
+    default_header_image = (
+        Path(__file__).parent / "res/default_header_image.jpg"
+    ).read_bytes()
+
+    result = {
+        "description": "No imformation given.",
+        "background": default_background,
+        "avatar": default_avatar,
+        "player_name": "Unknown",
+        "recent_2_week_play_time": None,
+        "game_data": [],
+    }
+
+    try:
+        async with httpx.AsyncClient(
+            proxy=proxy,
+            headers={
+                "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6"
+            },
+        ) as client:
+            response = await client.get(url)
+            if response.status_code == 200:
                 html = response.text
+            elif response.status_code == 302:
+                url = response.headers["Location"]
+                response = await client.get(url)
+                if response.status_code == 200:
+                    html = response.text
             else:
                 response.raise_for_status()
     except httpx.RequestError as exc:
         logger.error(f"Failed to get user data: {exc}")
-        return {}
+        return result
 
-    # description <meta property="twitter:description" content="这是一条概要ːmurasame_smileː">
+    # player name
+    player_name = re.search(r"<title>Steam 社区 :: (.*?)</title>", html)
+    if player_name:
+        result["player_name"] = player_name.group(1)
+
+    # description t<div class="profile_summary">\r\n\t\t\t\t\t\t\t\t風が雨が激しくても<br>思いだすんだ 僕らを照らす光があるよ<br>今日もいっぱい<br>明日もいっぱい 力を出しきってみるよ\t\t\t\t\t\t\t</div>
     description = re.search(
-        r'<meta property="twitter:description" content="(.*?)">', html
+        r'<div class="profile_summary">(.*?)</div>', html, re.DOTALL | re.MULTILINE
     )
     if description:
         description = description.group(1)
-    else:
-        description = "No imformation given."
-    
+        description = re.sub(r"<br>", "\n", description)
+        description = re.sub(r"\t", "", description)
+        result["description"] = description.strip()
+
     # remove emoji
-    description = re.sub(r"ː.*?ː", "", description)
+    result["description"] = re.sub(r"ː.*?ː", "", result["description"])
+
+    # remove xml
+    result["description"] = re.sub(r"<.*?>", "", result["description"])
 
     # background
     background_url = re.search(r"background-image: url\( \'(.*?)\' \)", html)
     if background_url:
         background_url = background_url.group(1)
-    else:
-        background_url = None
+        result["background"] = await _fetch(
+            background_url, default_background, proxy=proxy
+        )
 
-    try:
-        async with httpx.AsyncClient(proxy=proxy) as client:
-            response = await client.get(background_url)
-            if response.status_code == 200:
-                background = response.content
-            else:
-                response.raise_for_status()
-    except httpx.RequestError as exc:
-        logger.error(f"Failed to get user background: {exc}")
-        return {"description": description, "background": default_background}
+    # avatar
+    # \t<link rel="image_src" href="https://avatars.akamai.steamstatic.com/3ade30f61c3d2cc0b8c80aaf567b573cd022c405_full.jpg">
+    avatar_url = re.search(r'<link rel="image_src" href="(.*?)"', html)
+    if avatar_url:
+        avatar_url = avatar_url.group(1)
+        # https://avatars.akamai.steamstatic.com/3ade30f61c3d2cc0b8c80aaf567b573cd022c405_full.jpg
+        avatar_url_split = avatar_url.split("/")
+        avatar_file = cache_path / f"avatar_{avatar_url_split[-1].split('_')[0]}.jpg"
+        result["avatar"] = await _fetch(
+            avatar_url, default_avatar, cache_file=avatar_file, proxy=proxy
+        )
 
-    return {"description": description, "background": background}
+    # recent 2 week play time
+    # \t<div class="recentgame_quicklinks recentgame_recentplaytime">\r\n\t\t\t\t\t\t\t\t\t<div>15.5 小时（过去 2 周）</div>
+    play_time_text = re.search(
+        r'<div class="recentgame_quicklinks recentgame_recentplaytime">\s*<div>(.*?)</div>',
+        html,
+    )
+    if play_time_text:
+        play_time_text = play_time_text.group(1)
+        result["recent_2_week_play_time"] = play_time_text
+
+    # game data
+    soup = BeautifulSoup(html, "html.parser")
+    game_data = []
+    recent_games = soup.find_all("div", class_="recent_game")
+
+    for game in recent_games:
+        game_info = {}
+        game_info["game_name"] = game.find("div", class_="game_name").text.strip()
+        game_info["game_image_url"] = game.find("img", class_="game_capsule")["src"]
+        game_info_split = game_info["game_image_url"].split("/")
+        # https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/1144400/capsule_184x69_schinese.jpg?t=1724440433
+
+        game_info["game_image"] = await _fetch(
+            game_info["game_image_url"],
+            default_header_image,
+            cache_file=cache_path / f"header_{game_info_split[-2]}.jpg",
+            proxy=proxy,
+        )
+
+        play_time_text = game.find("div", class_="game_info_details").text.strip()
+        game_info["play_time"] = re.search(
+            r"总时数\s*(.*?)\s*小时", play_time_text
+        ).group(1)
+        game_info["last_played"] = (
+            re.search(r"最后运行日期：(.*) 日", play_time_text).group(1).strip() + " 日"
+        )
+        achievements = []
+        achievement_elements = game.find_all("div", class_="game_info_achievement")
+        for achievement in achievement_elements:
+            if "plus_more" in achievement["class"]:
+                continue
+            achievement_info = {}
+            achievement_info["name"] = achievement["data-tooltip-text"]
+            achievement_info["image_url"] = achievement.find("img")["src"]
+            achievement_info_split = achievement_info["image_url"].split("/")
+
+            achievement_info["image"] = await _fetch(
+                achievement_info["image_url"],
+                default_achievement_image,
+                cache_file=cache_path
+                / f"achievement_{achievement_info_split[-2]}_{achievement_info_split[-1]}",
+                proxy=proxy,
+            )
+            achievements.append(achievement_info)
+        game_info["achievements"] = achievements
+        game_info_achievement_summary = game.find(
+            "span", class_="game_info_achievement_summary"
+        )
+        if game_info_achievement_summary is None:
+            game_data.append(game_info)
+            continue
+        remain_achievement_text = game_info_achievement_summary.find(
+            "span", class_="ellipsis"
+        ).text
+        game_info["completed_achievement_number"] = int(
+            remain_achievement_text.split("/")[0].strip()
+        )
+        game_info["total_achievement_number"] = int(
+            remain_achievement_text.split("/")[1].strip()
+        )
+
+        game_data.append(game_info)
+
+    result["game_data"] = game_data
+
+    return result
 
 
 if __name__ == "__main__":

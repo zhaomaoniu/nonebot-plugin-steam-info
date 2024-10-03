@@ -18,23 +18,21 @@ require("nonebot_plugin_apscheduler")
 
 import nonebot_plugin_localstore as store
 from nonebot_plugin_apscheduler import scheduler
-from nonebot_plugin_alconna import Text, Image, UniMessage, Target
+from nonebot_plugin_alconna import Text, Image, UniMessage, Target, At
 
 from .config import Config
 from .models import ProcessedPlayer
 from .data_source import BindData, SteamInfoData, ParentData, DisableParentData
 from .steam import (
     get_steam_id,
-    get_game_header,
-    get_owned_games,
+    get_user_data,
     STEAM_ID_OFFSET,
-    get_games_details,
-    get_user_background,
     get_steam_users_info,
 )
 from .draw import (
     check_font,
     draw_start_gaming,
+    draw_player_status,
     draw_friends_status,
     vertically_concatenate_images,
 )
@@ -53,7 +51,7 @@ __plugin_meta__ = PluginMetadata(
 steamhelp: 查看帮助
 steambind [Steam ID 或 Steam 好友代码]: 绑定 Steam ID
 steamunbind: 解绑 Steam ID
-steaminfo [Steam ID 活 Steam好友代码]: 查看 Steam 账号信息
+steaminfo (可选)[@某人 或 Steam ID 或 Steam好友代码]: 查看 Steam 主页
 steamcheck: 查看 Steam 好友状态
 steamenable: 启用 Steam 播报
 steamdisable: 禁用 Steam 播报
@@ -314,11 +312,24 @@ async def unbind_handle(event: Event, target: Target = Depends(get_target)):
 
 @info.handle()
 async def info_handle(
-    event: Event, target: Target = Depends(get_target), arg: Message = CommandArg()
+    bot: Bot,
+    event: Event,
+    target: Target = Depends(get_target),
+    arg: Message = CommandArg(),
 ):
     parent_id = target.parent_id or target.id
 
-    if arg.extract_plain_text().strip() != "":
+    uni_arg = await UniMessage.generate(message=arg, event=event, bot=bot)
+    at = uni_arg[At]
+
+    if len(at) != 0:
+        user_id: str = at[0].target
+        user_data = bind_data.get(parent_id, user_id)
+        if user_data is None:
+            await info.finish("该用户未绑定 Steam ID")
+        steam_id = user_data["steam_id"]
+        steam_friend_code = str(int(steam_id) - STEAM_ID_OFFSET)
+    elif arg.extract_plain_text().strip() != "":
         steam_id = int(arg.extract_plain_text().strip())
         if steam_id < STEAM_ID_OFFSET:
             steam_friend_code = steam_id
@@ -336,34 +347,35 @@ async def info_handle(
         steam_id = user_data["steam_id"]
         steam_friend_code = str(int(steam_id) - STEAM_ID_OFFSET)
 
-    owned_game_response = await get_owned_games(
-        steam_id, config.steam_api_key, config.proxy
+    player_data = await get_user_data(steam_id, cache_path, config.proxy)
+
+    draw_data = [
+        {
+            "game_header": game["game_image"],
+            "game_name": game["game_name"],
+            "game_time": f"{game['play_time']} 小时",
+            "last_play_time": game["last_played"],
+            "achievements": game["achievements"],
+            "completed_achievement_number": game.get("completed_achievement_number"),
+            "total_achievement_number": game.get("total_achievement_number"),
+        }
+        for game in player_data["game_data"]
+    ]
+
+    image = draw_player_status(
+        player_data["background"],
+        player_data["avatar"],
+        player_data["player_name"],
+        str(steam_friend_code),
+        player_data["description"],
+        player_data["recent_2_week_play_time"],
+        draw_data,
     )
-    owned_games = owned_game_response["response"]["games"]
-    game_number = len(owned_games)
-    owned_games.sort(key=lambda x: x["rtime_last_played"], reverse=True)
-
-    # game_details = await get_games_details(
-    #     [game["appid"] for game in owned_games], cache_path, config.proxy
-    # )
-    # data = {game["data"]["steam_appid"]: game["data"] for game in game_details.values()}
-
-    # 选出 3 个最新运行的游戏
-    games = [game["appid"] for game in owned_games[:3]]
-    game_details = await get_games_details(games, cache_path, config.proxy)
-
-    if game_details is None:
-        await info.finish("获取游戏信息失败，请联系管理员查看日志")
-
-    game_headers = {appid: await get_game_header(appid, cache_path, config.proxy) for appid in games}
-    player_background = await get_user_background(steam_id, config.proxy)
-
-    if any(v is None for v in game_headers.values()):
-        await info.finish("获取游戏封面失败，请联系管理员查看日志")
 
     await info.finish(
-        f"你的 Steam ID: {steam_id}\n你的 Steam 好友代码: {steam_friend_code}\n"
-        f"你一共拥有 {game_number} 款游戏\n"
+        await UniMessage(
+            Image(raw=image_to_bytes(image)),
+        ).export(bot)
     )
 
 
