@@ -98,9 +98,9 @@ async def get_user_data(
         "game_data": [],
     }
 
-    local_time = datetime.now()
-    utc_time = datetime.now(timezone.utc)
-    offset_seconds = int((local_time - utc_time).total_seconds())
+    local_time = datetime.now(timezone.utc).astimezone()
+    utc_offset_minutes = int(local_time.utcoffset().total_seconds())
+    timezone_cookie_value = f"{utc_offset_minutes},0"
 
     try:
         async with httpx.AsyncClient(
@@ -108,7 +108,7 @@ async def get_user_data(
             headers={
                 "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6"
             },
-            cookies={"timezoneOffset": f"{offset_seconds},0"},
+            cookies={"timezoneOffset": timezone_cookie_value},
         ) as client:
             response = await client.get(url)
             if response.status_code == 200:
