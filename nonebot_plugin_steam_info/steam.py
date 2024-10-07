@@ -3,7 +3,8 @@ import httpx
 from pathlib import Path
 from bs4 import BeautifulSoup
 from nonebot.log import logger
-from typing import List, Optional, Dict
+from typing import List, Optional
+from datetime import datetime, timezone
 
 from .models import PlayerSummaries, PlayerData
 
@@ -97,12 +98,17 @@ async def get_user_data(
         "game_data": [],
     }
 
+    local_time = datetime.now()
+    utc_time = datetime.now(timezone.utc)
+    offset_seconds = int((local_time - utc_time).total_seconds())
+
     try:
         async with httpx.AsyncClient(
             proxy=proxy,
             headers={
                 "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6"
             },
+            cookies={"timezoneOffset": f"{offset_seconds},0"},
         ) as client:
             response = await client.get(url)
             if response.status_code == 200:

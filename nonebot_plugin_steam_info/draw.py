@@ -467,6 +467,9 @@ def create_gradient_image(
     size: Tuple[int, int], color1: Tuple[int, int, int], color2: Tuple[int, int, int]
 ) -> Image.Image:
     """创建渐变图片"""
+    # 确保颜色值在 0-255 范围内
+    color1 = tuple(max(0, min(255, c)) for c in color1)
+    color2 = tuple(max(0, min(255, c)) for c in color2)
     # 创建一个渐变的线性空间
     gradient_array = np.linspace(color1, color2, size[0])
 
@@ -474,6 +477,34 @@ def create_gradient_image(
     gradient_image = np.tile(gradient_array, (size[1], 1, 1)).astype(np.uint8)
 
     return Image.fromarray(gradient_image, "RGBA")
+
+
+def create_vertical_gradient_rect(width, height, start_color, end_color):
+    """
+    创建一个在竖直方向上渐变的矩形图像.
+
+    Args:
+        width (int): 矩形的宽度 (以像素为单位).
+        height (int): 矩形的高度 (以像素为单位).
+        start_color (tuple): 起始颜色，格式为 (R, G, B)，每个值范围为 0-255.
+        end_color (tuple): 结束颜色，格式为 (R, G, B)，每个值范围为 0-255.
+
+    Returns:
+        Image: PIL Image 对象，表示生成的渐变矩形.
+    """
+    if width <= 0 or height <= 0:
+        return Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    # 确保颜色不超过 0-255 的范围
+    start_color = tuple(max(0, min(255, c)) for c in start_color)
+    end_color = tuple(max(0, min(255, c)) for c in end_color)
+
+    # 使用 NumPy 创建一个线性渐变数组
+    gradient_array = np.linspace(start_color, end_color, num=height, dtype=np.uint8)
+    gradient_array = np.tile(gradient_array[:, np.newaxis, :], (1, width, 1))
+
+    # 使用 Pillow 创建图像并填充颜色
+    image = Image.fromarray(gradient_array)
+    return image
 
 
 def random_color_offset(
@@ -793,34 +824,6 @@ def draw_player_status(
     player_bg.paste(bg, ((player_bg.width - 960) // 2, 0), bg.convert("RGBA"))
 
     return player_bg
-
-
-def create_vertical_gradient_rect(width, height, start_color, end_color):
-    """
-    创建一个在竖直方向上渐变的矩形图像.
-
-    Args:
-        width (int): 矩形的宽度 (以像素为单位).
-        height (int): 矩形的高度 (以像素为单位).
-        start_color (tuple): 起始颜色，格式为 (R, G, B)，每个值范围为 0-255.
-        end_color (tuple): 结束颜色，格式为 (R, G, B)，每个值范围为 0-255.
-
-    Returns:
-        Image: PIL Image 对象，表示生成的渐变矩形.
-    """
-    # 确保颜色不超过 0-255 的范围
-    start_color = tuple(max(0, min(255, c)) for c in start_color)
-    end_color = tuple(max(0, min(255, c)) for c in end_color)
-
-    # 使用 NumPy 创建一个线性渐变数组
-    gradient_array = np.linspace(start_color, end_color, num=height, dtype=np.uint8)
-    gradient_array = np.repeat(gradient_array, width, axis=0).reshape(
-        (height, width, 3)
-    )
-
-    # 使用 Pillow 创建图像并填充颜色
-    image = Image.fromarray(gradient_array)
-    return image
 
 
 def rounded_rectangle(
