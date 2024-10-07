@@ -15,12 +15,15 @@
 ## 预览
 仿照了 Steam 好友列表的样式
 
+图 1. 部分播报
 ![image](./preview.png)
-<sub>图 1. 部分播报</sub>
+
+图 2. 全部播报
 ![image](./preview_1.png)
-<sub>图 2. 全部播报</sub>
+
+图 3. 个人 Steam 主页
 ![image](./preview_2.png)
-<sub>图 3. 个人 Steam 主页</sub>
+
 
 ## 使用
 | 命令 | 别名 |  说明 |
@@ -89,9 +92,26 @@
 | STEAM_REQUEST_INTERVAL | 300 | Steam 请求间隔 & 播报间隔。单位为秒 |
 | STEAM_BROADCAST_TYPE | `"part"` | 播报类型。`"part"` 为部分播报(图 2)，`"all"` 为全部播报(图 1)，`"none"` 为只播报文字消息 |
 | STEAM_DISABLE_BROADCAST_ON_STARTUP | `False` | Bot 启动时是否禁用播报 |
+| STEAM_FONT_REGULAR_PATH | fonts/MiSans-Regular.ttf | Regular 字体相对目录 |
+| STEAM_FONT_LIGHT_PATH | fonts/MiSans-Light.ttf | Light 字体相对目录 |
+| STEAM_FONT_BOLD_PATH |fonts/MiSans-Bold.ttf | Bold 字体相对目录 |
 
-最后再把仓库中 `fonts` 文件夹下的字体文件放到 Bot 的 **运行目录** 下，配置就完毕啦
+最后再把仓库中 `fonts` 文件夹放到 Bot 的 **运行目录** 下，配置就完毕啦
+
+在默认配置下，项目结构大致如下：
+```
+your_project/
+├── bot.py
+├── .env.*
+├── fonts/
+│   ├── MiSans-Regular.ttf
+│   ├── MiSans-Light.ttf
+│   └── MiSans-Bold.ttf
+└── ...
+```
 
 > 这里使用了 MiSans 字体，感谢 [MiSans](https://hyperos.mi.com/font/zh/)
 
->如果你希望使用其他字体，请在 `draw.py` 中，将 `font_regular_path`, `font_light_path` 和 `font_bold_path` 修改为你的字体文件路径
+> 如果你希望使用其他字体，请参考配置版块。
+
+> 如果配置中不填写 `font/`，则会在`your_project/`下寻找字体文件。

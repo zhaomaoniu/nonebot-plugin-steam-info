@@ -31,6 +31,7 @@ from .steam import (
 )
 from .draw import (
     check_font,
+    set_font_paths,
     draw_start_gaming,
     draw_player_status,
     draw_friends_status,
@@ -83,6 +84,11 @@ else:
 
     config = Config.parse_obj(get_driver().config)
 
+set_font_paths(
+    config.steam_font_regular_path,
+    config.steam_font_light_path,
+    config.steam_font_bold_path,
+)
 
 bind_data_path = store.get_data_file("nonebot_plugin_steam_info", "bind_data.json")
 steam_info_data_path = store.get_data_file(
