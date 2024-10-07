@@ -15,10 +15,10 @@
 ## 预览
 仿照了 Steam 好友列表的样式
 
-图 1. 部分播报
+图 1. 全部播报
 ![image](./preview.png)
 
-图 2. 全部播报
+图 2. 部分播报
 ![image](./preview_1.png)
 
 图 3. 个人 Steam 主页
