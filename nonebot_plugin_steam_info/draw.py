@@ -903,7 +903,7 @@ def create_progress_bar(
     )
 
     bar_image = create_vertical_gradient_rect(
-        int(width * progress), height - 4, bar_color_top, bar_color_bottem
+        int(width * progress) - 6, height - 4, bar_color_top, bar_color_bottem
     )
     bar_image = rounded_rectangle(bar_image, 6)
 
