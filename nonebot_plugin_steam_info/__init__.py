@@ -30,8 +30,8 @@ from .steam import (
     get_steam_users_info,
 )
 from .draw import (
-    set_font_paths,
     check_font,
+    set_font_paths,
     draw_start_gaming,
     draw_player_status,
     draw_friends_status,
