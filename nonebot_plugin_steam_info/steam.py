@@ -90,7 +90,7 @@ async def get_user_data(
     ).read_bytes()
 
     result = {
-        "description": "No imformation given.",
+        "description": "No information given.",
         "background": default_background,
         "avatar": default_avatar,
         "player_name": "Unknown",
