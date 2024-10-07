@@ -595,7 +595,7 @@ def draw_game_info(
 
     # 画最后游玩时间
     font = ImageFont.truetype(font_light_path, 22)
-    display_text = f"最后运行日期：{last_play_time}"
+    display_text = last_play_time
     draw.text(
         (int(bg.width - font.getlength(display_text)) - 10, 75),
         display_text,

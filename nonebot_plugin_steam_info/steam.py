@@ -195,12 +195,19 @@ async def get_user_data(
         )
 
         play_time_text = game.find("div", class_="game_info_details").text.strip()
-        game_info["play_time"] = re.search(
+        play_time = re.search(
             r"总时数\s*(.*?)\s*小时", play_time_text
-        ).group(1)
-        game_info["last_played"] = (
-            re.search(r"最后运行日期：(.*) 日", play_time_text).group(1).strip() + " 日"
         )
+        if play_time is None:
+            game_info["play_time"] = ""
+        else:
+            game_info["play_time"] = play_time.group(1)
+
+        last_played = re.search(r"最后运行日期：(.*) 日", play_time_text)
+        if last_played is not None:
+            game_info["last_played"] = "最后运行日期：" + last_played.group(1) + " 日"
+        else:
+            game_info["last_played"] = "当前正在游戏"
         achievements = []
         achievement_elements = game.find_all("div", class_="game_info_achievement")
         for achievement in achievement_elements:
