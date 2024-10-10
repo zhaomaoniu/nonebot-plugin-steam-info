@@ -499,7 +499,7 @@ def create_vertical_gradient_rect(width, height, start_color, end_color):
         Image: PIL Image 对象，表示生成的渐变矩形.
     """
     if width <= 0 or height <= 0:
-        return Image.new("RGBA", (width, height), (0, 0, 0, 0))
+        return Image.new("RGBA", (1, 1), (0, 0, 0, 0))
     # 确保颜色不超过 0-255 的范围
     start_color = tuple(max(0, min(255, c)) for c in start_color)
     end_color = tuple(max(0, min(255, c)) for c in end_color)
