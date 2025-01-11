@@ -1,4 +1,4 @@
-from typing import TypedDict, List, Dict, Optional
+from typing import TypedDict, List
 
 
 class Player(TypedDict):
@@ -29,22 +29,7 @@ class PlayerSummaries(TypedDict):
     response: PlayerSummariesResponse
 
 
-class ProcessedPlayer(TypedDict):
-    steamid: str
-    communityvisibilitystate: int
-    personaname: str
-    profileurl: str
-    avatar: str
-    avatarmedium: str
-    avatarfull: str
-    avatarhash: str
-    lastlogoff: int
-    personastate: int
-    realname: str
-    primaryclanid: str
-    timecreated: int
-    personastateflags: int
-
+class ProcessedPlayer(Player):
     game_start_time: int  # Unix timestamp
 
 
