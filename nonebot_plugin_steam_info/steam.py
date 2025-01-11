@@ -195,9 +195,7 @@ async def get_user_data(
         )
 
         play_time_text = game.find("div", class_="game_info_details").text.strip()
-        play_time = re.search(
-            r"总时数\s*(.*?)\s*小时", play_time_text
-        )
+        play_time = re.search(r"总时数\s*(.*?)\s*小时", play_time_text)
         if play_time is None:
             game_info["play_time"] = ""
         else:

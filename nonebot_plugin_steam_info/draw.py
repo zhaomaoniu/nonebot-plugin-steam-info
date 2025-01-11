@@ -25,12 +25,14 @@ font_regular_path = None
 font_light_path = None
 font_bold_path = None
 
+
 def set_font_paths(regular_path, light_path, bold_path):
     global font_regular_path, font_light_path, font_bold_path
     base_dir = Path().cwd()
     font_regular_path = str((base_dir / regular_path).resolve())
     font_light_path = str((base_dir / light_path).resolve())
     font_bold_path = str((base_dir / bold_path).resolve())
+
 
 def check_font():
     if not Path(font_regular_path).exists():
