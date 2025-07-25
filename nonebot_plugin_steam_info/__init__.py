@@ -18,7 +18,7 @@ require("nonebot_plugin_apscheduler")
 
 import nonebot_plugin_localstore as store
 from nonebot_plugin_apscheduler import scheduler
-from nonebot_plugin_alconna import Text, Image, UniMessage, Target, At
+from nonebot_plugin_alconna import Text, Image, UniMessage, Target, At, MsgTarget
 
 from .config import Config
 from .models import ProcessedPlayer
@@ -114,9 +114,7 @@ except FileNotFoundError as e:
     )
 
 
-async def get_target(event: Event, bot: Bot) -> Optional[Target]:
-    target = UniMessage.get_target(event, bot, bot.adapter.get_name())
-
+async def get_target(target: MsgTarget) -> Optional[Target]:
     if target.private:
         # 不支持私聊消息
         return None
