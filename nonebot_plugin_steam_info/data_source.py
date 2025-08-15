@@ -130,8 +130,12 @@ class SteamInfoData:
                     player.get("gameextrainfo") is not None
                     and old_player.get("gameextrainfo") is not None
                 ):
-                    # 继续游戏
-                    player["game_start_time"] = old_player["game_start_time"]
+                    if player.get("gameextrainfo") != old_player.get("gameextrainfo"):
+                        # 切换游戏
+                        player["game_start_time"] = int(time.time())
+                    else:
+                        # 继续游戏
+                        player["game_start_time"] = old_player["game_start_time"]
                 else:
                     player["game_start_time"] = None
                 processed_players.append(player)
