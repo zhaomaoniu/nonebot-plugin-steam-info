@@ -158,7 +158,7 @@ async def broadcast_steam_info(
 
         if entry["type"] == "start":
             msg.append(f"{player['personaname']} 开始玩 {player['gameextrainfo']} 了")
-        elif entry["type"] == "stop":
+        elif entry["type"] in ["stop", "change"]:
             time_start = old_player["game_start_time"]
             time_stop = time.time()
             hours = int((time_stop - time_start) / 3600)
@@ -166,13 +166,15 @@ async def broadcast_steam_info(
             time_str = (
                 f"{hours} 小时 {minutes} 分钟" if hours > 0 else f"{minutes} 分钟"
             )
-            msg.append(
-                f"{player['personaname']} 玩了 {time_str} {old_player['gameextrainfo']} 后不玩了"
-            )
-        elif entry["type"] == "change":
-            msg.append(
-                f"{player['personaname']} 停止玩 {old_player['gameextrainfo']}，开始玩 {player['gameextrainfo']} 了"
-            )
+
+            if entry["type"] == "change":
+                msg.append(
+                    f"{player['personaname']} 玩了 {time_str} {old_player['gameextrainfo']} 后，开始玩 {player['gameextrainfo']} 了"
+                )
+            else:
+                msg.append(
+                    f"{player['personaname']} 玩了 {time_str} {old_player['gameextrainfo']} 后不玩了"
+                )
         elif entry["type"] == "error":
             f"出现错误！{player['personaname']}\nNew: {player.get('gameextrainfo')}\nOld: {old_player.get('gameextrainfo')}"
         else:
@@ -240,8 +242,9 @@ async def update_steam_info():
         steam_ids = bind_data.get_all(parent_id)
         old_players_dict[parent_id] = steam_info_data.get_players(steam_ids)
 
-    steam_info_data.update_by_players(steam_info["response"]["players"])
-    steam_info_data.save()
+    if steam_info["response"]["players"] != []:
+        steam_info_data.update_by_players(steam_info["response"]["players"])
+        steam_info_data.save()
 
     return bind_data, old_players_dict
 
@@ -397,6 +400,8 @@ async def check_handle(
     steam_info = await get_steam_users_info(
         steam_ids, config.steam_api_key, config.proxy
     )
+    if steam_info["response"]["players"] == []:
+        await check.finish("连接 Steam API 失败，请重试")
 
     logger.debug(f"{parent_id} Players info: {steam_info}")
 
