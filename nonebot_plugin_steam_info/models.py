@@ -1,4 +1,4 @@
-from typing import TypedDict, List
+from typing import Optional, TypedDict, List
 
 
 class Player(TypedDict):
@@ -51,12 +51,12 @@ class GameData(TypedDict):
     completed_achievement_number: int
     total_achievement_number: int
 
-
 class PlayerData(TypedDict):
     steamid: str
     player_name: str
     background: bytes
     avatar: bytes
+    avatar_gif: Optional[bytes]
     description: str
     recent_2_week_play_time: str
     game_data: List[GameData]

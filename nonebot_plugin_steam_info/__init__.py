@@ -1,3 +1,5 @@
+import io
+import os
 import time
 import httpx
 import nonebot
@@ -7,9 +9,10 @@ from nonebot.log import logger
 from PIL import Image as PILImage
 from nonebot.params import Depends
 from nonebot.params import CommandArg
-from nonebot import on_command, require
+from nonebot import on_command, on_notice, require
 from typing import Union, Optional, List, Dict
 from nonebot.adapters import Message, Event, Bot
+from nonebot.adapters.onebot.v11 import MessageSegment, GroupMessageEvent, PrivateMessageEvent, GroupDecreaseNoticeEvent
 from nonebot.plugin import PluginMetadata, inherit_supported_adapters
 
 require("nonebot_plugin_alconna")
@@ -31,6 +34,7 @@ from .steam import (
 )
 from .draw import (
     check_font,
+    create_animated_steam_info,
     set_font_paths,
     draw_start_gaming,
     draw_player_status,
@@ -43,6 +47,21 @@ from .utils import (
     simplize_steam_player_data,
     convert_player_name_to_nickname,
 )
+
+async def send_both(bot: Bot, event: Event, segments: MessageSegment) -> None:
+    """
+        自动判断message是 List 还是单个，发送{单个消息}，允许发送群和个人
+    :param bot:
+    :param event:
+    :param segments:
+    :return:
+    """
+    if isinstance(event, GroupMessageEvent):
+        await bot.send_group_msg(group_id=event.group_id,
+                                 message=Message(segments))
+    elif isinstance(event, PrivateMessageEvent):
+        await bot.send_private_msg(user_id=event.user_id,
+                                   message=Message(segments))
 
 
 __plugin_meta__ = PluginMetadata(
@@ -75,6 +94,8 @@ enable = on_command("steamenable", aliases={"启用steam"}, priority=10)
 disable = on_command("steamdisable", aliases={"禁用steam"}, priority=10)
 update_parent_info = on_command("steamupdate", aliases={"更新群信息"}, priority=10)
 set_nickname = on_command("steamnickname", aliases={"steam昵称"}, priority=10)
+
+group_decrease = on_notice(priority=10)
 
 
 if hasattr(nonebot, "get_plugin_config"):
@@ -148,17 +169,37 @@ async def broadcast_steam_info(
         return None
 
     bot = nonebot.get_bot()
+    blocked_appids = config.steam_blocked_appids
+    
+    filtered_new = []
+    for player in new_players:
+        if not player.get("gameextrainfo"):
+            filtered_new.append(player)
+            continue
+        if player.get("gameid") not in blocked_appids:
+            filtered_new.append(player)
+            
+    filtered_old = []
+    for player in old_players:
+        if not player.get("gameextrainfo"):
+            filtered_old.append(player)
+            continue
+        if player.get("gameid") not in blocked_appids:
+            filtered_old.append(player)
 
-    play_data = steam_info_data.compare(old_players, new_players)
+    play_data = steam_info_data.compare(filtered_old, filtered_new)
 
     msg = []
     for entry in play_data:
         player: ProcessedPlayer = entry["player"]
         old_player: ProcessedPlayer = entry.get("old_player")
+        bind_info = bind_data.get_by_steam_id(parent_id, player["steamid"])
+        qq_number = bind_info["user_id"] if bind_info else "未知"
+        display_name = f"{player['personaname']}({qq_number})"
 
         if entry["type"] == "start":
-            msg.append(f"{player['personaname']} 开始玩 {player['gameextrainfo']} 了")
-        elif entry["type"] in ["stop", "change"]:
+            msg.append(f"{display_name} 开始玩 {player['gameextrainfo']} 了")
+        elif entry["type"] == "stop":
             time_start = old_player["game_start_time"]
             time_stop = time.time()
             hours = int((time_stop - time_start) / 3600)
@@ -166,15 +207,13 @@ async def broadcast_steam_info(
             time_str = (
                 f"{hours} 小时 {minutes} 分钟" if hours > 0 else f"{minutes} 分钟"
             )
-
-            if entry["type"] == "change":
-                msg.append(
-                    f"{player['personaname']} 玩了 {time_str} {old_player['gameextrainfo']} 后，开始玩 {player['gameextrainfo']} 了"
-                )
-            else:
-                msg.append(
-                    f"{player['personaname']} 玩了 {time_str} {old_player['gameextrainfo']} 后不玩了"
-                )
+            msg.append(
+                f"{display_name} 玩了 {time_str} {old_player['gameextrainfo']} 后不玩了"
+            )
+        elif entry["type"] == "change":
+            msg.append(
+                f"{display_name} 停止玩 {old_player['gameextrainfo']}，开始玩 {player['gameextrainfo']} 了"
+            )
         elif entry["type"] == "error":
             f"出现错误！{player['personaname']}\nNew: {player.get('gameextrainfo')}\nOld: {old_player.get('gameextrainfo')}"
         else:
@@ -242,9 +281,8 @@ async def update_steam_info():
         steam_ids = bind_data.get_all(parent_id)
         old_players_dict[parent_id] = steam_info_data.get_players(steam_ids)
 
-    if steam_info["response"]["players"] != []:
-        steam_info_data.update_by_players(steam_info["response"]["players"])
-        steam_info_data.save()
+    steam_info_data.update_by_players(steam_info["response"]["players"])
+    steam_info_data.save()
 
     return bind_data, old_players_dict
 
@@ -354,8 +392,8 @@ async def info_handle(
         steam_id = user_data["steam_id"]
         steam_friend_code = str(int(steam_id) - STEAM_ID_OFFSET)
 
-    player_data = await get_user_data(steam_id, cache_path, config.proxy)
-
+    player_data = await get_user_data(steam_id, cache_path, config.proxy, config.steam_blocked_appids)
+    
     draw_data = [
         {
             "game_header": game["game_image"],
@@ -369,39 +407,69 @@ async def info_handle(
         for game in player_data["game_data"]
     ]
 
-    image = draw_player_status(
-        player_data["background"],
-        player_data["avatar"],
-        player_data["player_name"],
-        str(steam_friend_code),
-        player_data["description"],
-        player_data["recent_2_week_play_time"],
-        draw_data,
-    )
-
-    await info.finish(
-        await UniMessage(
-            Image(raw=image_to_bytes(image)),
-        ).export(bot)
+    # 判断背景类型并生成对应图像
+    avatar_image = PILImage.open(BytesIO(player_data["avatar"]))
+    
+    if player_data["background"]["type"] == "video":
+        video_data = create_animated_steam_info(
+            player_data["background"]["data"],
+            avatar_image,
+            player_data["avatar_gif"],
+            player_data["player_name"],
+            str(steam_friend_code),
+            player_data["description"],
+            player_data["recent_2_week_play_time"],
+            draw_data
+        )
+        await send_both(bot, event, MessageSegment.video(video_data))
+    else:
+        # 生成静态图片
+        background_img = PILImage.open(io.BytesIO(player_data["background"]["data"]))
+        static_image = draw_player_status(
+            background_img,
+            player_data["avatar"],
+            player_data["player_name"],
+            str(steam_friend_code),
+            player_data["description"],
+            player_data["recent_2_week_play_time"],
+            draw_data,
+        )
+        await info.finish(await UniMessage(Image(raw=image_to_bytes(static_image))).export(bot)
     )
 
 
 @check.handle()
 async def check_handle(
-    target: Target = Depends(get_target), arg: Message = CommandArg()
+    bot: Bot, target: Target = Depends(get_target), arg: Message = CommandArg()
 ):
     if arg.extract_plain_text().strip() != "":
         return None
 
     parent_id = target.parent_id or target.id
+    try:
+        member_list = await bot.get_group_member_list(group_id=parent_id)
+        current_member_uids = [str(member["user_id"]) for member in member_list]
+    except Exception as e:
+        await check.finish(f"获取群成员列表失败: {str(e)}")
+    
+    # 清理逻辑
+    removed_count = 0
+    group_bindings = bind_data.content.get(str(parent_id), [])
+    for binding in group_bindings.copy():
+        user_id = binding["user_id"]
+        if user_id not in current_member_uids:
+            bind_data.remove(str(parent_id), user_id)
+            removed_count += 1
+    
+    if removed_count > 0:
+        bind_data.save()
+        await check.send(f"已清理{removed_count}个已离群用户的绑定信息")
 
     steam_ids = bind_data.get_all(parent_id)
 
     steam_info = await get_steam_users_info(
         steam_ids, config.steam_api_key, config.proxy
     )
-    if steam_info["response"]["players"] == []:
-        await check.finish("连接 Steam API 失败，请重试")
 
     logger.debug(f"{parent_id} Players info: {steam_info}")
 
@@ -485,3 +553,63 @@ async def set_nickname_handle(
     bind_data.save()
 
     await set_nickname.finish(f"已设置你的昵称为 {nickname}，将在 Steam 播报中显示")
+
+@group_decrease.handle()
+async def handle_group_decrease(event: GroupDecreaseNoticeEvent):
+    """处理用户退群事件，删除其在该群的绑定数据"""
+    if event.is_tome():
+        return
+    
+    user_id = event.user_id
+    group_id = event.group_id
+    
+    if bind_data.get(str(group_id), str(user_id)):
+        bind_data.remove(str(group_id), str(user_id))
+        bind_data.save()
+        logger.info(f"用户 {user_id} 退出群 {group_id}，已删除其Steam绑定数据")
+
+# 定时关闭播报任务
+async def schedule_close_broadcast():
+    """定时关闭所有群组的播报功能"""
+    for parent_id in bind_data.content.keys():
+        if not disable_parent_data.is_disabled(parent_id):
+            disable_parent_data.add(parent_id)
+    disable_parent_data.save()
+
+# 定时开启播报任务
+async def schedule_open_broadcast():
+    """定时开启所有群组的播报功能"""
+    for parent_id in bind_data.content.keys():
+        if disable_parent_data.is_disabled(parent_id):
+            disable_parent_data.remove(parent_id)
+    disable_parent_data.save()
+
+def setup_schedule_tasks():
+    if config.steam_schedule_enabled != 1:
+        return
+
+    close_hour, close_minute = map(int, config.steam_schedule_close_time.split(":"))
+    open_hour, open_minute = map(int, config.steam_schedule_open_time.split(":"))
+    
+    scheduler.add_job(
+        schedule_close_broadcast,
+        "cron",
+        hour=close_hour,
+        minute=close_minute,
+        id="steam_schedule_close",
+        replace_existing=True
+    )
+    logger.info(f"已设置定时关闭播报: 每天 {config.steam_schedule_close_time}")
+
+    scheduler.add_job(
+        schedule_open_broadcast,
+        "cron",
+        hour=open_hour,
+        minute=open_minute,
+        id="steam_schedule_open",
+        replace_existing=True
+    )
+    logger.info(f"已设置定时开启播报: 每天 {config.steam_schedule_open_time}")
+
+# 在插件加载时设置定时任务
+setup_schedule_tasks()

@@ -130,12 +130,8 @@ class SteamInfoData:
                     player.get("gameextrainfo") is not None
                     and old_player.get("gameextrainfo") is not None
                 ):
-                    if player.get("gameextrainfo") != old_player.get("gameextrainfo"):
-                        # 切换游戏
-                        player["game_start_time"] = int(time.time())
-                    else:
-                        # 继续游戏
-                        player["game_start_time"] = old_player["game_start_time"]
+                    # 继续游戏
+                    player["game_start_time"] = old_player["game_start_time"]
                 else:
                     player["game_start_time"] = None
                 processed_players.append(player)
@@ -164,13 +160,10 @@ class SteamInfoData:
             for old_player in old_players:
                 if player["steamid"] == old_player["steamid"]:
                     if player.get("gameextrainfo") != old_player.get("gameextrainfo"):
-                        if (
-                            player.get("gameextrainfo") is not None
-                            and old_player.get("gameextrainfo") is not None
-                        ):
+                        if player.get("gameextrainfo") is not None:
                             result.append(
                                 {
-                                    "type": "change",
+                                    "type": "start",
                                     "player": player,
                                     "old_player": old_player,
                                 }
@@ -183,10 +176,13 @@ class SteamInfoData:
                                     "old_player": old_player,
                                 }
                             )
-                        elif player.get("gameextrainfo") is not None :
+                        elif (
+                            player.get("gameextrainfo") is not None
+                            and old_player.get("gameextrainfo") is not None
+                        ):
                             result.append(
                                 {
-                                    "type": "start",
+                                    "type": "change",
                                     "player": player,
                                     "old_player": old_player,
                                 }

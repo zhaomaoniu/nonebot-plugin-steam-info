@@ -3,7 +3,7 @@ import pytz
 import httpx
 import datetime
 import calendar
-from PIL import Image
+from PIL import Image, ImageSequence, GifImagePlugin
 from io import BytesIO
 from pathlib import Path
 from typing import Dict, Optional
@@ -94,11 +94,38 @@ async def simplize_steam_player_data(
     }
 
 
-def image_to_bytes(image: Image.Image) -> bytes:
-    with BytesIO() as bio:
-        image.save(bio, format="PNG")
-        return bio.getvalue()
+#def image_to_bytes(image: Image.Image) -> bytes:
+#    with BytesIO() as bio:
+#        image.save(bio, format="PNG")
+#        return bio.getvalue()
 
+def image_to_bytes(image: Image.Image | bytes | GifImagePlugin.GifImageFile) -> bytes:
+    """统一将图像（含GIF）转换为字节流，静态图片保持原处理方式，GIF仅转换不缩放"""
+    if isinstance(image, bytes):
+        return image  # 直接返回字节流
+    
+    buf = BytesIO()
+    try:
+        # 处理GIF：保留所有帧和原始尺寸，仅进行格式转换
+        if isinstance(image, GifImagePlugin.GifImageFile):
+            frames = [frame.copy() for frame in ImageSequence.Iterator(image)]
+            durations = [image.info.get('duration', 100)] * len(frames)
+            
+            frames[0].save(
+                buf,
+                format='GIF',
+                append_images=frames[1:],
+                save_all=True,
+                duration=durations,
+                loop=0  # 保持无限循环
+            )
+        else:
+            # 静态图片保持原PNG处理方式
+            image.save(buf, format='PNG')
+        
+        return buf.getvalue()
+    except Exception as e:
+        raise TypeError(f"图像转换失败: {type(image)} - {e}")
 
 def hex_to_rgb(hex_color: str):
     return tuple(int(hex_color[i : i + 2], 16) for i in (0, 2, 4))

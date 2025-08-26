@@ -1,7 +1,11 @@
+import os
+import subprocess
+import tempfile
 import numpy as np
+import io
 from io import BytesIO
 from pathlib import Path
-from typing import List, Dict, Tuple
+from typing import List, Dict, Optional, Tuple, Any
 from colorsys import rgb_to_hsv, hsv_to_rgb
 from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageEnhance
 
@@ -602,7 +606,7 @@ def draw_game_info(
         (int(bg.width - font.getlength(display_text)) - 10, 75),
         display_text,
         font=font,
-        fill=(150, 150, 150),
+        fill=(255, 255, 255),
     )
 
     # 画游戏时间
@@ -612,7 +616,7 @@ def draw_game_info(
         (int(bg.width - font.getlength(display_text)) - 10, 50),
         display_text,
         font=font,
-        fill=(150, 150, 150),
+        fill=(255, 255, 255),
     )
 
     if completed_achievement_number is None or total_achievement_number is None:
@@ -636,7 +640,7 @@ def draw_game_info(
         (int(x), 20),
         f"{completed_achievement_number} / {total_achievement_number}",
         font=font,
-        fill=(130, 130, 130),
+        fill=(255, 255, 255),
     )
     x += (
         font.getlength(f"{completed_achievement_number} / {total_achievement_number}")
@@ -919,3 +923,289 @@ def create_progress_bar(
     border_image.paste(bar_image, (3, 2), bar_image)
 
     return border_image
+
+def create_static_steam_info(
+    background: Image.Image,
+    avatar: Image.Image,
+    player_name: str,
+    player_id: str,
+    description: str,
+    recent_2_week_play_time: Optional[str],
+    player_games: List[DrawPlayerStatusData]
+) -> Image.Image:
+    """创建静态背景的Steam信息图片，背景为与传入background相同分辨率的透明图层"""
+    bg = Image.new(
+        "RGBA",
+        (960, background.height),
+        (0, 0, 0, 0)
+    )
+    crop_region = (
+        (background.width - 960) // 2,
+        0,
+        (background.width + 960) // 2,
+        background.height
+    )
+    crop_width = crop_region[2] - crop_region[0]
+    crop_height = crop_region[3] - crop_region[1]
+
+    bg = Image.new("RGBA", (crop_width, crop_height), (0, 0, 0, 0))
+
+    # 处理头像
+    if isinstance(avatar, bytes):
+        avatar = Image.open(BytesIO(avatar))
+    avatar = avatar.resize((200, 200))
+    bg.paste(avatar, (40, 40))
+
+    draw = ImageDraw.Draw(bg)
+
+    # 画头像外框
+    draw.rectangle((40, 40, 240, 240), outline=(83, 164, 196), width=3)
+
+    # 画昵称
+    draw.text(
+        (280, 48),
+        player_name,
+        font=ImageFont.truetype(font_light_path, 40),
+        fill=(255, 255, 255),
+    )
+
+    # 画ID
+    draw.text(
+        (280, 100),
+        f"好友代码: {player_id}",
+        font=ImageFont.truetype(font_regular_path, 19),
+        fill=(255, 255, 255),
+    )
+
+    # 画简介
+    line_width = 0
+    offset = 0
+    line = ""
+    for idx, char in enumerate(description):
+        line += char
+        line_width += ImageFont.truetype(font_light_path, 22).getlength(char)
+        if line_width > 640 or idx == len(description) - 1 or char == "\n":
+            draw.text(
+                (280, 132 + offset),
+                line,
+                font=ImageFont.truetype(font_light_path, 22),
+                fill=(255, 255, 255),
+            )
+            line = ""
+            offset += 25
+            line_width = 0
+        if offset >= 25 * 4:
+            break
+
+    # 从原始背景获取颜色信息用于后续绘制
+    brightest_color, darkest_color = get_brightest_and_darkest_color(background)
+    brightest_color = tuple(map(lambda x: x - 30 if x >= 30 else 0, brightest_color))
+    darkest_color = tuple(
+        map(lambda x: x + 30 if x <= 255 - 30 else 255, darkest_color)
+    )
+    brightest_color = (brightest_color[0], brightest_color[1], brightest_color[2], 128)
+    brightest_color = random_color_offset(brightest_color, 20)
+    darkest_color = (darkest_color[0], darkest_color[1], darkest_color[2], 128)
+    darkest_color = random_color_offset(darkest_color, 20)
+
+    # 处理成就颜色
+    hsv_achievement_color = rgb_to_hsv(*brightest_color[:3])
+    achievement_color = tuple(
+        map(
+            int,
+            hsv_to_rgb(
+                hsv_achievement_color[0],
+                hsv_achievement_color[1] * 0.85,
+                hsv_achievement_color[2] * 0.6,
+            ),
+        )
+    )
+
+    # 绘制游戏信息
+    game_images: List[Image.Image] = []
+    for idx, game in enumerate(player_games):
+        game_image = Image.open(BytesIO(game["game_header"]))
+        game_info = draw_game_info(
+            game_image,
+            game["game_name"],
+            game["game_time"],
+            game["last_play_time"],
+            game["achievements"],
+            game["completed_achievement_number"],
+            game["total_achievement_number"],
+            achievement_color,
+        )
+        game_images.append(game_info)
+
+    # 绘制半透明黑色背景（用于游戏信息区域）
+    bg_game_height = 106 + sum([game_image.height + 26 for game_image in game_images])
+    bg_game = Image.new("RGBA", (920, bg_game_height))
+    draw_game = ImageDraw.Draw(bg_game)
+    draw_game.rectangle(
+        (0, 0, 920, bg_game_height),
+        fill=(0, 0, 0, 120),
+    )
+    bg.paste(bg_game, (20, 272), bg_game)
+
+    # 绘制渐变条
+    gradient = create_gradient_image((920, 50), brightest_color, darkest_color)
+    bg.paste(gradient, (20, 272), gradient)
+
+    # 绘制渐变条文字
+    draw.text(
+        (34, 279),
+        "最新动态",
+        font=ImageFont.truetype(font_light_path, 26),
+        fill=(255, 255, 255),
+    )
+    if recent_2_week_play_time is not None:
+        width = ImageFont.truetype(font_light_path, 26).getlength(
+            recent_2_week_play_time
+        )
+        draw.text(
+            (bg.width - width - 34, 279),  # 右对齐适应透明图层宽度
+            recent_2_week_play_time,
+            font=ImageFont.truetype(font_light_path, 26),
+            fill=(255, 255, 255),
+        )
+
+    # 绘制游戏图片
+    y = 350
+    for idx, game_image in enumerate(game_images):
+        bg.paste(
+            game_image,
+            ((bg.width - game_image.width) // 2, y),  # 水平居中适应透明图层宽度
+            game_image.convert("RGBA"),
+        )
+        y += game_image.height + 26
+
+    return bg
+
+def create_animated_steam_info(
+    background: Image.Image,
+    avatar: Image.Image,
+    avatar_gif: Image.Image,
+    player_name: str,
+    player_id: str,
+    description: str,
+    recent_2_week_play_time: Optional[str],
+    player_games: List[Dict],
+) -> BytesIO:
+    """
+    修复GIF保存为临时文件后变静态的问题，完整保留动画属性
+    """
+    video_path = os.getcwd() + "/origin.mp4"
+    if not os.path.exists(video_path):
+        raise FileNotFoundError(f"视频文件不存在: {video_path}")
+
+    try:
+        overlay = create_static_steam_info(
+            background=background[1],
+            avatar=avatar,
+            player_name=player_name,
+            player_id=player_id,
+            description=description,
+            recent_2_week_play_time=recent_2_week_play_time,
+            player_games=player_games
+        )
+
+        # 判断并处理GIF，确保保存所有动画帧
+        # is_gif = False
+        # if avatar_gif is not None: is_gif = True
+        gif_temp_path = ""
+        
+        # if isinstance(avatar_gif, Image.Image):
+        #     is_gif = avatar_gif.format == "GIF"
+        #     if is_gif:
+        #         with tempfile.NamedTemporaryFile(suffix=".gif", delete=False) as f:
+        #             # 获取GIF所有帧
+        #             frames = []
+        #             try:
+        #                 while True:
+        #                     frames.append(avatar_gif.copy())
+        #                     avatar_gif.seek(len(frames))
+        #             except EOFError:
+        #                 pass
+                    
+        #             # 保存完整动画（必须指定save_all=True才能保留多帧）
+        #             frames[0].save(
+        #                 f,
+        #                 format="GIF",
+        #                 save_all=True,
+        #                 append_images=frames[1:],
+        #                 duration=avatar.info.get("duration", 100),
+        #                 loop=avatar.info.get("loop", 0),
+        #                 disposal=2
+        #             )
+        #             gif_temp_path = f.name
+
+        # # 处理bytes类型的GIF（如果有）
+        if isinstance(avatar_gif, bytes):
+            with tempfile.NamedTemporaryFile(suffix=".gif", delete=False) as f:
+                f.write(avatar_gif)
+                gif_temp_path = f.name
+            with Image.open(gif_temp_path) as img:
+                img.format == "GIF"
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            overlay_path = os.path.join(temp_dir, "overlay.png")
+            output_path = os.path.join(temp_dir, "output.mp4")
+            overlay.save(overlay_path, "PNG")
+
+            # 构建ffmpeg参数
+            input_args = ["-i", video_path, "-i", overlay_path]
+            filter_parts = []
+            if avatar_gif is not None and gif_temp_path:
+                input_args.extend(["-ignore_loop", "0", "-i", gif_temp_path])
+                filter_parts = [
+                    "[0:v][1:v]overlay=0:0[base]",
+                    "[2:v]scale=200:200,loop=0:size=500[scaled_gif]",
+                    "[base][scaled_gif]overlay=40:40:shortest=1[final]"
+                ]
+                filter_complex = ";".join(filter_parts)
+                # 指定输出流为[final]
+                map_arg = ["-map", "[final]"]
+            else:
+                # 无GIF时的滤镜链：直接叠加视频和overlay，输出为最终结果
+                filter_complex = "[0:v][1:v]overlay=0:0"
+                map_arg = []  # 默认为第一个输出流
+
+            ffmpeg_cmd = [
+                "ffmpeg", "-y", *input_args,
+                "-filter_complex", filter_complex,
+                *map_arg,  # 添加流映射参数
+                "-c:v", "libx264", "-crf", "23",
+                "-preset", "medium", "-pix_fmt", "yuv420p",
+                output_path
+            ]
+
+            result = subprocess.run(
+                ffmpeg_cmd, stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE, text=True
+            )
+            if result.returncode != 0:
+                raise RuntimeError(f"视频合成失败: {result.stderr}")
+
+            # 读取输出视频
+            with open(output_path, "rb") as f:
+                output_stream = BytesIO(f.read())
+                output_stream.seek(0)
+
+        for path in [video_path, overlay_path, gif_temp_path]:
+            if path and os.path.exists(path):
+                try:
+                    os.remove(path)
+                except:
+                    pass
+
+        return output_stream
+
+    except Exception as e:
+        # 错误清理
+        for path in [video_path, overlay_path, gif_temp_path]:
+            if locals().get(path) and os.path.exists(locals().get(path)):
+                try:
+                    os.remove(locals().get(path))
+                except:
+                    pass
+        raise RuntimeError(f"处理视频时发生错误: {str(e)}")

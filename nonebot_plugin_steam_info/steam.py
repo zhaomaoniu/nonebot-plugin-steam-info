@@ -1,5 +1,10 @@
+import os
 import re
 import httpx
+import asyncio
+import cv2
+import numpy as np
+from PIL import Image, ImageSequence
 from pathlib import Path
 from bs4 import BeautifulSoup
 from nonebot.log import logger
@@ -11,6 +16,41 @@ from .models import PlayerSummaries, PlayerData
 
 STEAM_ID_OFFSET = 76561197960265728
 
+async def _fetch_video_frames(url: str, proxy: str = None, max_frames=10) -> List[Image.Image]:
+    """获取视频帧并转换为PIL图像列表"""
+    try:
+        async with httpx.AsyncClient(proxy=proxy) as client:
+            response = await client.get(url)
+            if response.status_code != 200:
+                return []
+            
+            # 保存视频到临时文件
+            origin_path = os.path.join(os.getcwd(), "origin.mp4")
+            with open(origin_path, "wb") as f:
+                f.write(response.content)
+
+            # 读取视频帧
+            cap = cv2.VideoCapture(origin_path)
+            frames = []
+            frame_count = 0
+            
+            while frame_count < max_frames:
+                ret, frame = cap.read()
+                if not ret:
+                    break
+                
+                frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                pil_img = Image.fromarray(frame_rgb)
+                
+                frames.append(pil_img)
+                frame_count += 1
+            
+            cap.release()
+            return frames
+            
+    except Exception as e:
+        logger.error(f"处理视频背景失败: {e}")
+        return []
 
 def get_steam_id(steam_id_or_steam_friends_code: str) -> str:
     if not steam_id_or_steam_friends_code.isdigit():
@@ -77,7 +117,7 @@ async def _fetch(
 
 
 async def get_user_data(
-    steam_id: int, cache_path: Path, proxy: str = None
+    steam_id: int, cache_path: Path, proxy: str = None, steam_blocked_appids: list = None
 ) -> PlayerData:
     url = f"https://steamcommunity.com/profiles/{steam_id}"
     default_background = (Path(__file__).parent / "res/bg_dots.png").read_bytes()
@@ -91,8 +131,9 @@ async def get_user_data(
 
     result = {
         "description": "No information given.",
-        "background": default_background,
+        "background": {"type": "image", "data": default_background},
         "avatar": default_avatar,
+        "avatar_gif": None,
         "player_name": "Unknown",
         "recent_2_week_play_time": None,
         "game_data": [],
@@ -146,24 +187,56 @@ async def get_user_data(
     result["description"] = re.sub(r"<.*?>", "", result["description"])
 
     # background
-    background_url = re.search(r"background-image: url\( \'(.*?)\' \)", html)
-    if background_url:
-        background_url = background_url.group(1)
-        result["background"] = await _fetch(
-            background_url, default_background, proxy=proxy
+    video_match = re.search(
+        r'<div class="profile_animated_background">\s*<video[^>]*>\s*<source[^>]*>\s*<source src="(.*?\.mp4)"', 
+        html, 
+        re.IGNORECASE | re.DOTALL
+    )
+
+    if video_match:
+        video_url = video_match.group(1)
+        frames = await _fetch_video_frames(video_url, proxy=proxy)
+        if frames:
+            result["background"] = {"type": "video", "data": frames}
+        else:
+            result["background"] = {"type": "image", "data": default_background}
+    else:
+        image_match = re.search(
+            r"background-image: url\( \'(.*?)\' \)", 
+            html
         )
+        background_url = image_match.group(1) if image_match else None
+        
+        if background_url:
+            image_data = await _fetch(background_url, default_background, proxy=proxy)
+        else:
+            image_data = default_background
+            
+        result["background"] = {"type": "image", "data": image_data}
+        
+    
 
     # avatar
     # \t<link rel="image_src" href="https://avatars.akamai.steamstatic.com/3ade30f61c3d2cc0b8c80aaf567b573cd022c405_full.jpg">
-    avatar_url = re.search(r'<link rel="image_src" href="(.*?)"', html)
-    if avatar_url:
-        avatar_url = avatar_url.group(1)
-        # https://avatars.akamai.steamstatic.com/3ade30f61c3d2cc0b8c80aaf567b573cd022c405_full.jpg
-        avatar_url_split = avatar_url.split("/")
-        avatar_file = cache_path / f"avatar_{avatar_url_split[-1].split('_')[0]}.jpg"
-        result["avatar"] = await _fetch(
-            avatar_url, default_avatar, cache_file=avatar_file, proxy=proxy
-        )
+    gif_avatar_match = re.search(r'<img\s+[^>]*src\s*=\s*"(https://shared\.akamai\.steamstatic\.com/community_assets/images/items/[^"]+\.gif)"', html, re.DOTALL)
+    static_avatar_match = re.search(r'<(?:img|link)[^>]*?(?:src|href)\s*=\s*"(.*?_full\.jpg)"', html)
+    # print("静态头像匹配结果:", static_avatar_match)  # 查看是否为None
+    
+    if static_avatar_match:
+        static_avatar_url = static_avatar_match.group(1)
+        static_avatar_file = cache_path / static_avatar_url.split("/")[-1]
+        result["avatar"] = await _fetch(static_avatar_url, default_avatar, static_avatar_file, proxy)
+        # print(f"静态图片信息{static_avatar_url}, {static_avatar_file}")
+    else:
+        result["avatar"] = default_avatar
+            
+    if gif_avatar_match:
+        gif_avatar_url = gif_avatar_match.group(1)
+        gif_avatar_file = cache_path / gif_avatar_url.split("/")[-1]
+        result["avatar_gif"] = await _fetch(gif_avatar_url, None, gif_avatar_file, proxy)
+        # print(f"动态图片信息{gif_avatar_url}, {gif_avatar_file}")
+    else:
+        result["avatar_gif"] = None
 
     # recent 2 week play time
     # \t<div class="recentgame_quicklinks recentgame_recentplaytime">\r\n\t\t\t\t\t\t\t\t\t<div>15.5 小时（过去 2 周）</div>
@@ -176,11 +249,17 @@ async def get_user_data(
         result["recent_2_week_play_time"] = play_time_text
 
     # game data
+    blocked_appids = steam_blocked_appids
     soup = BeautifulSoup(html, "html.parser")
     game_data = []
     recent_games = soup.find_all("div", class_="recent_game")
 
     for game in recent_games:
+        game_image_url = game.find("img", class_="game_capsule")["src"]
+        appid_match = re.search(r"/apps/(\d+)/", game_image_url)
+        if appid_match and appid_match.group(1) in blocked_appids:
+            logger.info(f"屏蔽游戏 {game.find('div', class_='game_name').text.strip()} (AppID: {appid_match.group(1)})")
+            continue  # 跳过屏蔽的游戏
         game_info = {}
         game_info["game_name"] = game.find("div", class_="game_name").text.strip()
         game_info["game_image_url"] = game.find("img", class_="game_capsule")["src"]
@@ -249,9 +328,6 @@ async def get_user_data(
 
 
 if __name__ == "__main__":
-    from nonebot.log import logger
-    import asyncio
-
     data = asyncio.run(get_user_data(76561199135038179, None))
 
     with open("bg.jpg", "wb") as f:
