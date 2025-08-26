@@ -1,5 +1,5 @@
 import io
-import os
+import re
 import time
 import httpx
 import nonebot
@@ -13,6 +13,7 @@ from nonebot import on_command, on_notice, require
 from typing import Union, Optional, List, Dict
 from nonebot.adapters import Message, Event, Bot
 from nonebot.adapters.onebot.v11 import MessageSegment, GroupMessageEvent, PrivateMessageEvent, GroupDecreaseNoticeEvent
+from nonebot.adapters.onebot.v11.permission import GROUP_ADMIN, GROUP_OWNER
 from nonebot.plugin import PluginMetadata, inherit_supported_adapters
 
 require("nonebot_plugin_alconna")
@@ -313,20 +314,33 @@ async def help_handle():
 
 @bind.handle()
 async def bind_handle(
-    event: Event, target: Target = Depends(get_target), cmd_arg: Message = CommandArg()
+    event: Event, target: Target = Depends(get_target), cmd_arg: Message = CommandArg(), permission=GROUP_ADMIN | GROUP_OWNER
 ):
     parent_id = target.parent_id or target.id
+    target_user_id = event.get_user_id()
 
     arg = cmd_arg.extract_plain_text()
+    
+    at_list = (await UniMessage.generate(message=cmd_arg, event=event))[At]
 
+    if at_list and permission:
+        if len(at_list) > 1:
+            await bind.finish("只能同时绑定一个用户")
+        target_user_id = str(at_list[0].target)
+        arg = re.search(r'\d+$', arg.strip()).group() if re.search(r'\d+$', arg.strip()) else ""
+        
+    print(arg)
+    
     if not arg.isdigit():
         await bind.finish(
             "请输入正确的 Steam ID 或 Steam好友代码，格式: steambind [Steam ID 或 Steam好友代码]"
         )
 
     steam_id = get_steam_id(arg)
+    if existing_user := bind_data.get_by_steam_id(parent_id, steam_id):
+        await bind.finish(f"该Steam ID已被用户{existing_user['user_id']}绑定，请使用其他ID重新绑定")
 
-    if user_data := bind_data.get(parent_id, event.get_user_id()):
+    if user_data := bind_data.get(parent_id, target_user_id):
         user_data["steam_id"] = steam_id
         bind_data.save()
 
@@ -334,7 +348,7 @@ async def bind_handle(
     else:
         bind_data.add(
             parent_id,
-            {"user_id": event.get_user_id(), "steam_id": steam_id, "nickname": None},
+            {"user_id": target_user_id, "steam_id": steam_id, "nickname": None},
         )
         bind_data.save()
 
