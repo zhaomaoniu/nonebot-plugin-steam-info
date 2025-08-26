@@ -5,7 +5,7 @@ import numpy as np
 import io
 from io import BytesIO
 from pathlib import Path
-from typing import List, Dict, Optional, Tuple, Any
+from typing import List, Dict, Optional, Tuple
 from colorsys import rgb_to_hsv, hsv_to_rgb
 from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageEnhance
 
